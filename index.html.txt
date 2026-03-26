@@ -424,7 +424,17 @@
 
     function loadData(showToast = false) {
       google.script.run
-        .withSuccessHandler(function(result) {
+        .withSuccessHandler(function(rawResult) {
+          let result = rawResult;
+          if (typeof rawResult === 'string') {
+            try {
+              result = JSON.parse(rawResult);
+            } catch (e) {
+              console.error('Falha ao parsear syncDataJson:', e, rawResult);
+              result = null;
+            }
+          }
+
           console.log('[dashboard] resposta syncData:', result);
           if (!result || typeof result !== 'object') {
             console.warn('syncData retornou resultado inválido:', result);
@@ -453,7 +463,7 @@
           console.error(err);
           alert('Erro ao carregar dados: ' + (err.message || err));
         })
-        .syncData();
+        .syncDataJson();
     }
 
     document.getElementById('btn-sync').addEventListener('click', function() {

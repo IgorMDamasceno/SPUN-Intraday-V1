@@ -74,7 +74,7 @@ function getConfig() {
   ensureStructure_();
 
   const sh = getSpreadsheet_().getSheetByName(SHEET_CONFIG);
-  const values = sh.getDataRange().getValues();
+  const values = sh.getDataRange().getDisplayValues();
   const config = {};
 
   for (let i = 1; i < values.length; i++) {
@@ -180,7 +180,7 @@ function syncData() {
       success: true,
       data: data,
       config: config,
-      updatedAt: new Date()
+      updatedAt: new Date().toISOString()
     };
   } catch (error) {
     logDebug_('syncData: erro', {
@@ -191,7 +191,7 @@ function syncData() {
       success: false,
       data: [],
       config: { dashboard_title: 'Dashboard de Operações' },
-      updatedAt: new Date(),
+      updatedAt: new Date().toISOString(),
       error: error && error.message ? error.message : String(error)
     };
   }
@@ -199,4 +199,8 @@ function syncData() {
 
 function debugSyncData() {
   return syncData();
+}
+
+function syncDataJson() {
+  return JSON.stringify(syncData());
 }
