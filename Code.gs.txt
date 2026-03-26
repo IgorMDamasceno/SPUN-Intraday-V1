@@ -51,6 +51,38 @@ function getConfig() {
   };
 }
 
+function parseValor_(rawValue) {
+  if (typeof rawValue === 'number') {
+    return isNaN(rawValue) ? 0 : rawValue;
+  }
+
+  const text = String(rawValue || '').trim();
+  if (!text) return 0;
+
+  const normalized = text
+    .replace(/[R$\s]/g, '')
+    .replace(/\u00A0/g, '')
+    .replace(/[^0-9,.\-]/g, '');
+
+  if (!normalized) return 0;
+
+  const hasComma = normalized.includes(',');
+  const hasDot = normalized.includes('.');
+
+  if (hasComma && hasDot) {
+    const ptBr = Number(normalized.replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(ptBr)) return ptBr;
+  }
+
+  if (hasComma && !hasDot) {
+    const commaOnly = Number(normalized.replace(',', '.'));
+    if (!isNaN(commaOnly)) return commaOnly;
+  }
+
+  const fallback = Number(normalized);
+  return isNaN(fallback) ? 0 : fallback;
+}
+
 function getAllData() {
   ensureStructure_();
 
@@ -66,7 +98,7 @@ function getAllData() {
     .map(row => ({
       operacao: String(row[0] || '').trim(),
       dados: String(row[1] || '').trim(),
-      valor: Number(row[2]) || 0
+      valor: parseValor_(row[2])
     }));
 }
 
