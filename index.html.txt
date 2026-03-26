@@ -207,19 +207,11 @@
       }).filter(item => item.value > 0);
 
       const totalSpend = spendData.reduce((acc, cur) => acc + cur.value, 0);
-      const pieRadius = 44;
-      const circumference = 2 * Math.PI * pieRadius;
-      let offset = 0;
-
-      const pieSlices = spendData.map(item => {
-        const pct = totalSpend > 0 ? (item.value / totalSpend) : 0;
-        const arc = pct * circumference;
-        const slice = `
-          <circle cx="56" cy="56" r="${pieRadius}" fill="none" stroke="${item.color}" stroke-width="14"
-            stroke-dasharray="${arc} ${circumference}" stroke-dashoffset="${-offset}" stroke-linecap="round"></circle>
+      const stackedSegments = spendData.map(item => {
+        const pct = totalSpend > 0 ? (item.value / totalSpend) * 100 : 0;
+        return `
+          <div class="h-full" style="width:${Math.max(pct, 1)}%;background:${item.color}" title="${item.label} - ${pct.toFixed(1)}%"></div>
         `;
-        offset += arc;
-        return slice;
       }).join('');
 
       const tableRows = spendData.map(item => {
@@ -236,11 +228,11 @@
 
       document.getElementById('chart-revenue').innerHTML = `
         <div class="h-full flex items-center justify-between gap-2">
-          <div class="w-[112px] shrink-0 flex items-center justify-center relative">
-            <svg width="112" height="112" class="transform -rotate-90">
-              <circle cx="56" cy="56" r="${pieRadius}" fill="none" stroke="#1a1a2e" stroke-width="14"></circle>
-              ${pieSlices}
-            </svg>
+          <div class="flex-1">
+            <div class="text-[10px] text-gray-400 mb-1">Distribuição percentual do gasto</div>
+            <div class="h-8 w-full rounded-md overflow-hidden bg-gray-900 border border-white/10 flex">
+              ${stackedSegments || '<div class="w-full h-full bg-gray-800"></div>'}
+            </div>
           </div>
           <div class="text-right pr-1">
             <div class="text-[10px] text-gray-400">Operações</div>
