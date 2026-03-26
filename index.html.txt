@@ -94,6 +94,8 @@
   </div>
 
   <script>
+    const DOLLAR_RATE = 5.30;
+
     let allData = [];
     let appConfig = {
       dashboard_title: 'Dashboard de Operações'
@@ -145,9 +147,12 @@
     function getMetricsForOp(data, op) {
       const aqG = getVal(data, op, 'AQ - Gasto');
       const aqR = getVal(data, op, 'AQ - Receita');
-      const reRB = getVal(data, op, 'RE - Receita - B');
-      const reRA = getVal(data, op, 'RE - Receita - A');
-      const reRP = getVal(data, op, 'RE - Receita - P');
+      const reRBUsd = getVal(data, op, 'RE - Receita - B');
+      const reRAUsd = getVal(data, op, 'RE - Receita - A');
+      const reRPUsd = getVal(data, op, 'RE - Receita - P');
+      const reRB = reRBUsd * DOLLAR_RATE;
+      const reRA = reRAUsd * DOLLAR_RATE;
+      const reRP = reRPUsd * DOLLAR_RATE;
       const reRe = reRB + reRA + reRP;
       const reSB = getVal(data, op, 'RE - Sessões - B');
       const reSA = getVal(data, op, 'RE - Sessões - A');
@@ -156,7 +161,13 @@
       const totalRev = aqR + reRe;
       const roas = aqG > 0 ? totalRev / aqG : 0;
 
-      return { aqG, aqR, reRB, reRA, reRP, reRe, reSB, reSA, reSP, reSes, totalRev, roas };
+      return {
+        aqG, aqR,
+        reRBUsd, reRAUsd, reRPUsd,
+        reRB, reRA, reRP, reRe,
+        reSB, reSA, reSP, reSes,
+        totalRev, roas
+      };
     }
 
     function renderSummary() {
@@ -436,9 +447,9 @@
         `;
 
         const maxSesBar = Math.max(m.reSB, m.reSA, m.reSP, 1);
-        const rpsB = m.reSB > 0 ? (m.reRB / m.reSB) * 1000 : 0;
-        const rpsA = m.reSA > 0 ? (m.reRA / m.reSA) * 1000 : 0;
-        const rpsP = m.reSP > 0 ? (m.reRP / m.reSP) * 1000 : 0;
+        const rpsB = m.reSB > 0 ? (m.reRBUsd / m.reSB) * 1000 : 0;
+        const rpsA = m.reSA > 0 ? (m.reRAUsd / m.reSA) * 1000 : 0;
+        const rpsP = m.reSP > 0 ? (m.reRPUsd / m.reSP) * 1000 : 0;
         const maxRpsBar = Math.max(rpsB, rpsA, rpsP, 1);
         const sesBars = [
           { label: 'Broadcast', sessoes: m.reSB, rps: rpsB, colorSessions: 'bg-blue-600', colorRps: 'bg-blue-300' },
