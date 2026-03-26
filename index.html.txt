@@ -207,7 +207,7 @@
       const stackedSegments = spendData.map(item => {
         const pct = totalSpend > 0 ? (item.value / totalSpend) * 100 : 0;
         return `
-          <div class="h-full" style="width:${Math.max(pct, 1)}%;background:${item.color}" title="${item.label} - ${pct.toFixed(1)}%"></div>
+          <div class="h-full" style="width:${Math.max(pct, 1)}%;background:${item.color}" title="${item.label} | Gasto: ${fmt(item.value)} | ${pct.toFixed(1)}%"></div>
         `;
       }).join('');
 
@@ -308,7 +308,14 @@
       const points = scatterData.map(d => {
         const x = margin.l + (d.gasto / maxX) * innerW;
         const y = margin.t + innerH - ((d.roasAq - minY) / spanY) * innerH;
-        return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="${d.color}" opacity="0.95"></circle>`;
+        return `
+          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6.5" fill="transparent">
+            <title>${d.label} | Gasto: ${fmt(d.gasto)} | ROAS AQ: ${fmtRoaPct(d.roasAq)}</title>
+          </circle>
+          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="${d.color}" opacity="0.95">
+            <title>${d.label} | Gasto: ${fmt(d.gasto)} | ROAS AQ: ${fmtRoaPct(d.roasAq)}</title>
+          </circle>
+        `;
       }).join('');
 
       const zeroY = margin.t + innerH - ((0 - minY) / spanY) * innerH;
@@ -321,6 +328,8 @@
           ${points}
           <text x="${margin.l}" y="${margin.t - 1}" fill="#9ca3af" font-size="8">ROAS AQ (Y)</text>
           <text x="${margin.l + innerW - 40}" y="${plotH - 4}" fill="#9ca3af" font-size="8">Gasto (X)</text>
+          <text x="1" y="${margin.t + 8}" fill="#9ca3af" font-size="7">${fmtRoaPct(maxYRaw)}</text>
+          <text x="1" y="${margin.t + innerH}" fill="#9ca3af" font-size="7">${fmtRoaPct(minYRaw)}</text>
         </svg>
       `;
       document.getElementById('roas-legend').innerHTML = `
