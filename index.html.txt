@@ -130,6 +130,12 @@
       return pct.toFixed(1).replace('.', ',') + '%';
     }
 
+    function fmtSignedBRL(v) {
+      const n = Number(v || 0);
+      if (n < 0) return '- ' + fmt(Math.abs(n));
+      return fmt(n);
+    }
+
     function fmtDateTime(v) {
       const d = new Date(v);
       return d.toLocaleString('pt-BR');
@@ -375,8 +381,8 @@
               ${sesBars.map(sb => {
                 const heightSessions = (sb.sessoes / maxSesBar) * 100;
                 const heightRps = (sb.rps / maxRpsBar) * 100;
-                const labelBottomSessions = Math.min(Math.max(heightSessions, 4), 88);
-                const labelBottomRps = Math.min(Math.max(heightRps, 4), 88);
+                const labelBottomSessions = Math.min(Math.max(heightSessions, 4), 72);
+                const labelBottomRps = Math.min(Math.max(heightRps, 4), 72);
                 return `
                   <div class="flex-1 max-w-[112px] flex flex-col items-center gap-1">
                     <div class="text-[10px] text-gray-400 font-semibold">${sb.label}</div>
@@ -409,8 +415,7 @@
               <h3 class="text-lg font-bold text-white">${op}</h3>
               <div class="text-right">
                 <div class="text-xs text-gray-400">ROAS Geral</div>
-                <div class="text-2xl font-bold ${m.roas >= 1 ? 'text-emerald-400' : 'text-red-400'}">${fmtRoaPct(m.roas)}</div>
-                <div class="text-[11px] text-gray-400 mt-0.5">Bruto: ${fmt(m.totalRev - m.aqG)}</div>
+                <div class="text-xl font-bold ${m.totalRev - m.aqG >= 0 ? 'text-emerald-400' : 'text-red-400'} whitespace-nowrap">${fmtSignedBRL(m.totalRev - m.aqG)} / ${fmtRoaPct(m.roas)}</div>
               </div>
             </div>
 
