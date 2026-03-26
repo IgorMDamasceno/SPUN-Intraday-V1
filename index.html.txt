@@ -125,6 +125,11 @@
       });
     }
 
+    function fmtRoaPct(roas) {
+      const pct = (Number(roas || 0) - 1) * 100;
+      return pct.toFixed(1).replace('.', ',') + '%';
+    }
+
     function fmtDateTime(v) {
       const d = new Date(v);
       return d.toLocaleString('pt-BR');
@@ -175,7 +180,7 @@
         { label: 'Gasto Total', value: fmt(totalGasto), icon: 'trending-down', color: 'text-red-400', bg: 'bg-red-500/10' },
         { label: 'Receita Total', value: fmt(totalReceitaTotal), icon: 'trending-up', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
         { label: 'Sessões', value: fmtN(totalSessoes), icon: 'users', color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
-        { label: 'ROAS Geral', value: roasGeral.toFixed(2) + 'x', icon: 'target', color: 'text-amber-400', bg: 'bg-amber-500/10' }
+        { label: 'ROAS Geral', value: fmtRoaPct(roasGeral), icon: 'target', color: 'text-amber-400', bg: 'bg-amber-500/10' }
       ];
 
       document.getElementById('summary-cards').innerHTML = cards.map((cd, i) => `
@@ -245,7 +250,7 @@
         const h = maxRoas > 0 ? (b.value / maxRoas) * 100 : 0;
         return `
           <div class="flex-1 flex flex-col items-center gap-1">
-            <span class="text-[10px] text-gray-300 font-medium">${b.value.toFixed(1)}x</span>
+            <span class="text-[10px] text-gray-300 font-medium">${fmtRoaPct(b.value)}</span>
             <div class="w-full rounded-sm ${b.value >= 1 ? 'bg-amber-500' : 'bg-red-500'}" style="height:${Math.max(h,3)}%"></div>
             <span class="text-[8px] text-gray-500 truncate w-full text-center">${b.label}</span>
           </div>
@@ -266,7 +271,7 @@
       document.getElementById('rev-re').textContent = fmt(totalRE);
       document.getElementById('ses-total').textContent = fmtN(totalSes);
       document.getElementById('roas-spent').textContent = fmt(totalGasto);
-      document.getElementById('roas-value').textContent = totalGasto > 0 ? (totalRev / totalGasto).toFixed(2) + 'x' : '-';
+      document.getElementById('roas-value').textContent = totalGasto > 0 ? fmtRoaPct(totalRev / totalGasto) : '-';
     }
 
     function renderOpsGrid() {
@@ -370,20 +375,22 @@
               ${sesBars.map(sb => {
                 const heightSessions = (sb.sessoes / maxSesBar) * 100;
                 const heightRps = (sb.rps / maxRpsBar) * 100;
+                const labelBottomSessions = Math.min(Math.max(heightSessions, 4), 88);
+                const labelBottomRps = Math.min(Math.max(heightRps, 4), 88);
                 return `
                   <div class="flex-1 max-w-[112px] flex flex-col items-center gap-1">
                     <div class="text-[10px] text-gray-400 font-semibold">${sb.label}</div>
                     <div class="w-full h-30 flex items-end justify-center gap-2 px-1 pb-1">
                       <div class="w-9 flex flex-col items-center justify-end gap-1">
                         <div class="w-full h-24 relative flex items-end">
-                          <span class="absolute left-1/2 -translate-x-1/2 text-[10px] text-gray-200 font-medium leading-none whitespace-nowrap" style="bottom: calc(${Math.max(heightSessions, 4)}% + 3px)">${fmtN(sb.sessoes)}</span>
+                          <span class="absolute left-1/2 -translate-x-1/2 text-[10px] text-gray-200 font-medium leading-none whitespace-nowrap" style="bottom: calc(${labelBottomSessions}% + 3px)">${fmtN(sb.sessoes)}</span>
                           <div class="w-full ${sb.colorSessions} rounded-t-sm" style="height:${Math.max(heightSessions, 4)}%"></div>
                         </div>
                         <span class="text-[10px] text-gray-400">Sessões</span>
                       </div>
                       <div class="w-9 flex flex-col items-center justify-end gap-1">
                         <div class="w-full h-24 relative flex items-end">
-                          <span class="absolute left-1/2 -translate-x-1/2 text-[10px] text-gray-200 font-medium leading-none whitespace-nowrap" style="bottom: calc(${Math.max(heightRps, 4)}% + 3px)">${fmtUSD(sb.rps)}</span>
+                          <span class="absolute left-1/2 -translate-x-1/2 text-[10px] text-gray-200 font-medium leading-none whitespace-nowrap" style="bottom: calc(${labelBottomRps}% + 3px)">${fmtUSD(sb.rps)}</span>
                           <div class="w-full ${sb.colorRps} rounded-t-sm" style="height:${Math.max(heightRps, 4)}%"></div>
                         </div>
                         <span class="text-[10px] text-gray-400">RPS</span>
@@ -402,7 +409,8 @@
               <h3 class="text-lg font-bold text-white">${op}</h3>
               <div class="text-right">
                 <div class="text-xs text-gray-400">ROAS Geral</div>
-                <div class="text-2xl font-bold ${m.roas >= 1 ? 'text-emerald-400' : 'text-red-400'}">${m.roas.toFixed(2)}x</div>
+                <div class="text-2xl font-bold ${m.roas >= 1 ? 'text-emerald-400' : 'text-red-400'}">${fmtRoaPct(m.roas)}</div>
+                <div class="text-[11px] text-gray-400 mt-0.5">Bruto: ${fmt(m.totalRev - m.aqG)}</div>
               </div>
             </div>
 
@@ -417,11 +425,11 @@
               </div>
               <div class="bg-white/5 rounded-lg p-3">
                 <div class="text-xs text-gray-400 mb-1">ROAS Aquisição</div>
-                <div class="text-lg font-bold ${roasAQ >= 1 ? 'text-emerald-400' : 'text-red-400'}">${roasAQ.toFixed(2)}x</div>
+                <div class="text-lg font-bold ${roasAQ >= 1 ? 'text-emerald-400' : 'text-red-400'}">${fmtRoaPct(roasAQ)}</div>
               </div>
               <div class="bg-white/5 rounded-lg p-3">
                 <div class="text-xs text-gray-400 mb-1">ROAS Investimento</div>
-                <div class="text-lg font-bold ${roasInv >= 1 ? 'text-emerald-400' : 'text-red-400'}">${roasInv.toFixed(2)}x</div>
+                <div class="text-lg font-bold ${roasInv >= 1 ? 'text-emerald-400' : 'text-red-400'}">${fmtRoaPct(roasInv)}</div>
               </div>
             </div>
 
