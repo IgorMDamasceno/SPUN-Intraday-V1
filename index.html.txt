@@ -221,6 +221,27 @@
       lucide.createIcons();
     }
 
+    function toggleOperationFilter(op) {
+      const p = getOperationParts(op);
+      const sameEmpresa = filterState.empresa.length === 1 && filterState.empresa[0] === p.empresa;
+      const samePais = filterState.pais.length === 1 && filterState.pais[0] === p.pais;
+      const sameNicho = filterState.nicho.length === 1 && filterState.nicho[0] === p.nicho;
+      const isSame = sameEmpresa && samePais && sameNicho;
+
+      if (isSame) {
+        filterState.empresa = [];
+        filterState.pais = [];
+        filterState.nicho = [];
+      } else {
+        filterState.empresa = p.empresa ? [p.empresa] : [];
+        filterState.pais = p.pais ? [p.pais] : [];
+        filterState.nicho = p.nicho ? [p.nicho] : [];
+      }
+
+      renderFilters();
+      applyFilters();
+    }
+
     function renderFilterDropdown(type, label, options) {
       const selected = filterState[type];
       const selectedText = selected.length > 0 ? selected.join(', ') : 'Todos';
@@ -347,14 +368,14 @@
       const stackedSegments = spendData.map(item => {
         const pct = totalSpend > 0 ? (item.value / totalSpend) * 100 : 0;
         return `
-          <div class="h-full" style="width:${Math.max(pct, 1)}%;background:${item.color}" title="${item.label} | Gasto: ${fmt(item.value)} | ${pct.toFixed(1)}%"></div>
+          <div class="h-full cursor-pointer" data-op="${item.label}" style="width:${Math.max(pct, 1)}%;background:${item.color}" title="${item.label} | Gasto: ${fmt(item.value)} | ${pct.toFixed(1)}%"></div>
         `;
       }).join('');
 
       const tableRows = spendData.map(item => {
         const pct = totalSpend > 0 ? (item.value / totalSpend) * 100 : 0;
         return `
-          <div class="grid grid-cols-[10px_1fr_auto_auto] items-center gap-2 text-[10px] py-0.5 border-b border-white/5">
+          <div class="grid grid-cols-[10px_1fr_auto_auto] items-center gap-2 text-[10px] py-0.5 border-b border-white/5 cursor-pointer" data-op="${item.label}">
             <span class="w-2.5 h-2.5 rounded-full" style="background:${item.color}"></span>
             <span class="text-gray-300 truncate">${item.label}</span>
             <span class="text-gray-200 whitespace-nowrap">${fmt(item.value)}</span>
@@ -399,7 +420,7 @@
             const magnitude = (Math.abs(item.value) / maxAbsLucro) * 42;
             const isPositive = item.value >= 0;
             return `
-              <div class="w-[72px] h-full flex flex-col items-center justify-center shrink-0">
+              <div class="w-[72px] h-full flex flex-col items-center justify-center shrink-0 cursor-pointer" data-op="${item.label}">
                 <div class="text-[9px] ${isPositive ? 'text-emerald-300' : 'text-red-300'} whitespace-nowrap mb-1">${fmtSignedBRL(item.value)}</div>
                 <div class="relative w-full h-20">
                   <div class="absolute left-0 right-0 top-1/2 border-t border-white/15"></div>
@@ -419,7 +440,7 @@
         </div>
         <div class="max-h-[98px] overflow-y-auto pr-1">
           ${lucroData.map(item => `
-            <div class="grid grid-cols-[1fr_auto] gap-2 text-[10px] py-0.5 border-b border-white/5">
+            <div class="grid grid-cols-[1fr_auto] gap-2 text-[10px] py-0.5 border-b border-white/5 cursor-pointer" data-op="${item.label}">
               <span class="text-gray-300 truncate">${item.label}</span>
               <span class="${item.value >= 0 ? 'text-emerald-300' : 'text-red-300'} whitespace-nowrap">${fmtSignedBRL(item.value)}</span>
             </div>
@@ -448,10 +469,10 @@
         const x = margin.l + (d.gasto / maxX) * innerW;
         const y = margin.t + innerH - ((d.roasPct - minY) / spanY) * innerH;
         return `
-          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6.5" fill="transparent">
+          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6.5" fill="transparent" data-op="${d.label}">
             <title>${d.label} | Gasto: ${fmt(d.gasto)} | ROAS AQ: ${fmtRoaPct(d.roasAq)}</title>
           </circle>
-          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="${d.color}" opacity="0.95">
+          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="${d.color}" opacity="0.95" data-op="${d.label}">
             <title>${d.label} | Gasto: ${fmt(d.gasto)} | ROAS AQ: ${fmtRoaPct(d.roasAq)}</title>
           </circle>
         `;
@@ -478,7 +499,7 @@
         </div>
         <div class="max-h-[98px] overflow-y-auto pr-1">
           ${scatterData.map(d => `
-            <div class="grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] py-0.5 border-b border-white/5 items-center">
+            <div class="grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] py-0.5 border-b border-white/5 items-center cursor-pointer" data-op="${d.label}">
               <div class="flex items-center gap-1 min-w-0">
                 <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${d.color}"></span>
                 <span class="text-gray-300 truncate">${d.label}</span>
@@ -733,8 +754,6 @@
       if (!type) return;
       const values = [...document.querySelectorAll(`input[data-filter-checkbox="${type}"]:checked`)].map(el => el.value);
       filterState[type] = values;
-      renderFilters();
-      applyFilters();
     });
 
     document.getElementById('filters-wrap').addEventListener('input', function(e) {
@@ -755,6 +774,36 @@
       filterState.nicho = [];
       renderFilters();
       applyFilters();
+    });
+
+    document.getElementById('filters-wrap').addEventListener('toggle', function(e) {
+      if (e.target.tagName !== 'DETAILS') return;
+      if (!e.target.open) {
+        renderFilters();
+        applyFilters();
+      }
+    }, true);
+
+    document.addEventListener('click', function(e) {
+      const wrap = document.getElementById('filters-wrap');
+      if (wrap.contains(e.target)) return;
+      let hadOpen = false;
+      wrap.querySelectorAll('details[open]').forEach(d => {
+        d.open = false;
+        hadOpen = true;
+      });
+      if (hadOpen) {
+        renderFilters();
+        applyFilters();
+      }
+    });
+
+    ['chart-revenue', 'revenue-legend', 'chart-sessions', 'lucro-legend', 'chart-roas', 'roas-legend'].forEach(id => {
+      document.getElementById(id).addEventListener('click', function(e) {
+        const el = e.target.closest('[data-op]');
+        if (!el) return;
+        toggleOperationFilter(el.getAttribute('data-op'));
+      });
     });
 
     loadData();
