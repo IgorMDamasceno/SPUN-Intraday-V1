@@ -83,23 +83,85 @@ function parseValor_(rawValue) {
   return isNaN(fallback) ? 0 : fallback;
 }
 
+function isHeaderRow_(row) {
+  const c1 = String(row[0] || '').trim().toLowerCase();
+  const c2 = String(row[1] || '').trim().toLowerCase();
+  const c3 = String(row[2] || '').trim().toLowerCase();
+  return c1 === 'operação' && c2 === 'dados' && c3 === 'valor';
+}
+
+function parseSingleCellBlock_(cellValue) {
+  const text = String(cellValue || '').trim();
+  if (!text) return [];
+
+  const hasTab = text.indexOf('\t') >= 0;
+  const hasBreak = text.indexOf('\n') >= 0 || text.indexOf('\\n') >= 0;
+  if (!hasTab || !hasBreak) return [];
+
+  const normalized = text.replace(/\\n/g, '\n');
+  const lines = normalized
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return [];
+
+  const parsed = [];
+  lines.forEach((line, idx) => {
+    const cols = line.split('\t').map(v => String(v || '').trim());
+    if (cols.length < 3) return;
+
+    if (idx === 0) {
+      const headerCandidate = [cols[0], cols[1], cols[2]];
+      if (isHeaderRow_(headerCandidate)) return;
+    }
+
+    parsed.push({
+      operacao: cols[0],
+      dados: cols[1],
+      valor: parseValor_(cols[2])
+    });
+  });
+
+  return parsed;
+}
+
 function getAllData() {
   ensureStructure_();
 
   const sh = getSpreadsheet_().getSheetByName(SHEET_DATA);
   const lastRow = sh.getLastRow();
+  if (lastRow < 1) return [];
 
-  if (lastRow < 2) return [];
+  const values = sh.getRange(1, 1, lastRow, 3).getValues();
+  const startIndex = values.length > 0 && isHeaderRow_(values[0]) ? 1 : 0;
 
-  const values = sh.getRange(2, 1, lastRow - 1, 3).getValues();
+  const rows = [];
+  for (let i = startIndex; i < values.length; i++) {
+    const row = values[i];
+    const op = String(row[0] || '').trim();
+    const dados = String(row[1] || '').trim();
 
-  return values
-    .filter(row => String(row[0]).trim() !== '')
-    .map(row => ({
-      operacao: String(row[0] || '').trim(),
-      dados: String(row[1] || '').trim(),
+    if (!op && !dados && String(row[2] || '').trim() === '') continue;
+
+    if (!dados && String(row[2] || '').trim() === '') {
+      const parsedRows = parseSingleCellBlock_(row[0]);
+      if (parsedRows.length > 0) {
+        rows.push.apply(rows, parsedRows);
+      }
+      continue;
+    }
+
+    if (!op) continue;
+
+    rows.push({
+      operacao: op,
+      dados: dados,
       valor: parseValor_(row[2])
-    }));
+    });
+  }
+
+  return rows;
 }
 
 function syncData() {

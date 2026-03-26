@@ -425,6 +425,12 @@
     function loadData(showToast = false) {
       google.script.run
         .withSuccessHandler(function(result) {
+          if (!result || typeof result !== 'object') {
+            console.warn('syncData retornou resultado inválido:', result);
+            renderAll([], null);
+            return;
+          }
+
           appConfig = result.config || appConfig;
           document.getElementById('main-title').textContent = appConfig.dashboard_title || 'Dashboard de Operações';
           renderAll(result.data || [], result.updatedAt);
