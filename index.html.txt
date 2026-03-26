@@ -55,18 +55,13 @@
         <div class="card-glass rounded-xl p-4 fade-up fade-up-1">
           <h3 class="text-xs font-semibold text-gray-300 mb-2">Gasto Geral por Operação</h3>
           <div id="chart-revenue" class="h-32"></div>
-          <div class="text-xs text-gray-500 mt-2 space-y-1">
-            <div class="flex justify-between"><span>Gasto Total</span><span id="rev-aq" class="text-emerald-400 font-medium">R$ 0</span></div>
-            <div class="flex justify-between"><span>Operações</span><span id="rev-re" class="text-indigo-400 font-medium">0</span></div>
-          </div>
+          <div id="revenue-legend" class="text-xs text-gray-500 mt-2"></div>
         </div>
 
         <div class="card-glass rounded-xl p-4 fade-up fade-up-2">
-          <h3 class="text-xs font-semibold text-gray-300 mb-2">Sessões Retenção</h3>
-          <div id="chart-sessions" class="h-32 flex items-end gap-1"></div>
-          <div class="text-xs text-gray-500 mt-2 space-y-1">
-            <div class="flex justify-between"><span>Total</span><span id="ses-total" class="text-cyan-400 font-medium">0</span></div>
-          </div>
+          <h3 class="text-xs font-semibold text-gray-300 mb-2">Lucro Geral por Operação</h3>
+          <div id="chart-sessions" class="h-32"></div>
+          <div id="lucro-legend" class="text-xs text-gray-500 mt-2"></div>
         </div>
 
         <div class="card-glass rounded-xl p-4 fade-up fade-up-3">
@@ -240,42 +235,66 @@
       }).join('');
 
       document.getElementById('chart-revenue').innerHTML = `
-        <div class="h-full flex gap-3">
+        <div class="h-full flex items-center justify-between gap-2">
           <div class="w-[112px] shrink-0 flex items-center justify-center relative">
             <svg width="112" height="112" class="transform -rotate-90">
               <circle cx="56" cy="56" r="${pieRadius}" fill="none" stroke="#1a1a2e" stroke-width="14"></circle>
               ${pieSlices}
             </svg>
           </div>
-          <div class="flex-1 min-w-0">
-            <div class="grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] text-gray-500 pb-1 border-b border-white/10">
-              <span>Operação</span><span>Gasto</span><span>%</span>
-            </div>
-            <div class="max-h-[118px] overflow-y-auto pr-1">
-              ${tableRows || '<div class="text-[10px] text-gray-500 py-2">Sem gasto registrado.</div>'}
-            </div>
+          <div class="text-right pr-1">
+            <div class="text-[10px] text-gray-400">Operações</div>
+            <div class="text-2xl font-bold text-indigo-300">${ops.length}</div>
           </div>
         </div>
       `;
+      document.getElementById('revenue-legend').innerHTML = `
+        <div class="grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] text-gray-500 pb-1 border-b border-white/10">
+          <span>Operação</span><span>Gasto</span><span>%</span>
+        </div>
+        <div class="max-h-[98px] overflow-y-auto pr-1">
+          ${tableRows || '<div class="text-[10px] text-gray-500 py-2">Sem gasto registrado.</div>'}
+        </div>
+      `;
 
-      const sesBars = [];
-      let maxSes = 0;
-      ops.forEach(op => {
+      const lucroData = ops.map(op => {
         const m = getMetricsForOp(allData, op);
-        sesBars.push({ label: op, value: m.reSes });
-        maxSes = Math.max(maxSes, m.reSes);
+        return { label: op, value: m.totalRev - m.aqG };
       });
+      const maxAbsLucro = Math.max(1, ...lucroData.map(i => Math.abs(i.value)));
 
-      document.getElementById('chart-sessions').innerHTML = sesBars.map(b => {
-        const h = maxSes > 0 ? (b.value / maxSes) * 100 : 0;
-        return `
-          <div class="flex-1 flex flex-col items-center gap-1">
-            <span class="text-[10px] text-gray-300 font-medium">${fmtN(b.value)}</span>
-            <div class="w-full rounded-sm bg-cyan-500" style="height:${Math.max(h,3)}%"></div>
-            <span class="text-[8px] text-gray-500 truncate w-full text-center">${b.label}</span>
-          </div>
-        `;
-      }).join('');
+      document.getElementById('chart-sessions').innerHTML = `
+        <div class="h-full flex items-end gap-2">
+          ${lucroData.map((item, idx) => {
+            const magnitude = (Math.abs(item.value) / maxAbsLucro) * 42;
+            const isPositive = item.value >= 0;
+            return `
+              <div class="flex-1 min-w-0 h-full flex flex-col items-center justify-center">
+                <div class="text-[9px] ${isPositive ? 'text-emerald-300' : 'text-red-300'} whitespace-nowrap mb-1">${fmtSignedBRL(item.value)}</div>
+                <div class="relative w-full h-20">
+                  <div class="absolute left-0 right-0 top-1/2 border-t border-white/15"></div>
+                  <div class="absolute left-1/2 -translate-x-1/2 w-6 ${isPositive ? 'bg-emerald-500' : 'bg-red-500'} rounded-sm"
+                    style="${isPositive ? `bottom:50%;height:${Math.max(magnitude, 3)}%` : `top:50%;height:${Math.max(magnitude, 3)}%`}"></div>
+                </div>
+                <div class="text-[8px] text-gray-500 truncate w-full text-center">${item.label}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+      document.getElementById('lucro-legend').innerHTML = `
+        <div class="grid grid-cols-[1fr_auto] gap-2 text-[10px] text-gray-500 pb-1 border-b border-white/10">
+          <span>Operação</span><span>Lucro</span>
+        </div>
+        <div class="max-h-[98px] overflow-y-auto pr-1">
+          ${lucroData.map(item => `
+            <div class="grid grid-cols-[1fr_auto] gap-2 text-[10px] py-0.5 border-b border-white/5">
+              <span class="text-gray-300 truncate">${item.label}</span>
+              <span class="${item.value >= 0 ? 'text-emerald-300' : 'text-red-300'} whitespace-nowrap">${fmtSignedBRL(item.value)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
 
       const roasBars = [];
       let maxRoas = 0;
@@ -296,17 +315,12 @@
         `;
       }).join('');
 
-      let totalSes = 0, totalGasto = 0, totalRev = 0;
+      let totalGasto = 0, totalRev = 0;
       ops.forEach(op => {
         const m = getMetricsForOp(allData, op);
-        totalSes += m.reSes;
         totalGasto += m.aqG;
         totalRev += m.totalRev;
       });
-
-      document.getElementById('rev-aq').textContent = fmt(totalGasto);
-      document.getElementById('rev-re').textContent = fmtN(ops.length);
-      document.getElementById('ses-total').textContent = fmtN(totalSes);
       document.getElementById('roas-spent').textContent = fmt(totalGasto);
       document.getElementById('roas-value').textContent = totalGasto > 0 ? fmtRoaPct(totalRev / totalGasto) : '-';
     }
