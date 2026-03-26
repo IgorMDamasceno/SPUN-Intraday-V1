@@ -283,7 +283,7 @@
         const aqPercent = (m.aqR / totalForPie * 100).toFixed(1);
         const rePercent = (m.reRe / totalForPie * 100).toFixed(1);
 
-        const pieRadius = 62;
+        const pieRadius = 65;
         const circumference = 2 * Math.PI * pieRadius;
         const aqArc = (aqPercent / 100) * circumference;
         const reArc = (rePercent / 100) * circumference;
@@ -297,11 +297,11 @@
         const pieHTML = `
           <div class="flex flex-col sm:flex-row items-center sm:items-start justify-center gap-4">
             <div class="relative flex items-center justify-center shrink-0">
-              <svg width="188" height="188" class="transform -rotate-90">
-                <circle cx="94" cy="94" r="${pieRadius}" fill="none" stroke="#1a1a2e" stroke-width="20"/>
-                <circle cx="94" cy="94" r="${pieRadius}" fill="none" stroke="#22c55e" stroke-width="20"
+              <svg width="196" height="196" class="transform -rotate-90">
+                <circle cx="98" cy="98" r="${pieRadius}" fill="none" stroke="#1a1a2e" stroke-width="20"/>
+                <circle cx="98" cy="98" r="${pieRadius}" fill="none" stroke="#22c55e" stroke-width="20"
                       stroke-dasharray="${aqArc} ${circumference}" stroke-linecap="round"/>
-                <circle cx="94" cy="94" r="${pieRadius}" fill="none" stroke="#6366f1" stroke-width="20"
+                <circle cx="98" cy="98" r="${pieRadius}" fill="none" stroke="#6366f1" stroke-width="20"
                       stroke-dasharray="${reArc} ${circumference}" stroke-dashoffset="${-aqArc}" stroke-linecap="round"/>
               </svg>
               <div class="absolute text-center px-4 max-w-[130px]">
@@ -366,24 +366,24 @@
 
         const sessionsHTML = `
           <div>
-            <div class="h-48 flex items-end justify-around gap-2 mb-3">
+            <div class="h-44 flex items-end justify-around gap-2 mb-1">
               ${sesBars.map(sb => {
                 const heightSessions = (sb.sessoes / maxSesBar) * 100;
                 const heightRps = (sb.rps / maxRpsBar) * 100;
                 return `
-                  <div class="flex-1 max-w-[118px] flex flex-col items-center gap-1">
-                    <div class="text-[11px] text-gray-400 font-semibold mb-1">${sb.label}</div>
-                    <div class="w-full h-32 flex items-end justify-center gap-2 bg-gray-800/80 rounded-t-md px-2 pb-1">
+                  <div class="flex-1 max-w-[112px] flex flex-col items-center gap-1">
+                    <div class="text-[10px] text-gray-400 font-semibold">${sb.label}</div>
+                    <div class="w-full h-30 flex items-end justify-center gap-2 px-1 pb-1">
                       <div class="w-9 flex flex-col items-center justify-end gap-1">
-                        <span class="text-[11px] text-gray-200 font-medium leading-none">${fmtN(sb.sessoes)}</span>
-                        <div class="w-full h-24 flex items-end">
+                        <div class="w-full h-24 relative flex items-end">
+                          <span class="absolute left-1/2 -translate-x-1/2 text-[10px] text-gray-200 font-medium leading-none whitespace-nowrap" style="bottom: calc(${Math.max(heightSessions, 4)}% + 3px)">${fmtN(sb.sessoes)}</span>
                           <div class="w-full ${sb.colorSessions} rounded-t-sm" style="height:${Math.max(heightSessions, 4)}%"></div>
                         </div>
                         <span class="text-[10px] text-gray-400">Sessões</span>
                       </div>
                       <div class="w-9 flex flex-col items-center justify-end gap-1">
-                        <span class="text-[11px] text-gray-200 font-medium leading-none">${fmtUSD(sb.rps)}</span>
-                        <div class="w-full h-24 flex items-end">
+                        <div class="w-full h-24 relative flex items-end">
+                          <span class="absolute left-1/2 -translate-x-1/2 text-[10px] text-gray-200 font-medium leading-none whitespace-nowrap" style="bottom: calc(${Math.max(heightRps, 4)}% + 3px)">${fmtUSD(sb.rps)}</span>
                           <div class="w-full ${sb.colorRps} rounded-t-sm" style="height:${Math.max(heightRps, 4)}%"></div>
                         </div>
                         <span class="text-[10px] text-gray-400">RPS</span>
@@ -431,11 +431,11 @@
                 <div class="relative flex justify-center">${pieHTML}</div>
               </div>
               <div>
-                <h4 class="text-xs font-semibold text-gray-300 mb-4">Receita Retenção (Broadcast/Automação/Push)</h4>
+                <h4 class="text-xs font-semibold text-gray-300 mb-4">Receita Retenção</h4>
                 ${barsHTML}
               </div>
               <div>
-                <h4 class="text-xs font-semibold text-gray-300 mb-4">Sessões e RPS (Broadcast/Automação/Push)</h4>
+                <h4 class="text-xs font-semibold text-gray-300 mb-4">Sessões e RPS - Retenção</h4>
                 ${sessionsHTML}
               </div>
             </div>
