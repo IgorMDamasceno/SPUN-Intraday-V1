@@ -71,6 +71,14 @@
         </div>
       </div>
 
+      <div class="card-glass rounded-xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-white">Filtros de Operação</h3>
+          <button id="btn-clear-filters" class="text-xs text-indigo-300 hover:text-indigo-200">Limpar filtros</button>
+        </div>
+        <div id="filters-wrap" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
+      </div>
+
       <div id="ops-grid" class="space-y-4"></div>
 
       <div class="card-glass rounded-xl p-4 fade-up fade-up-4 flex items-center justify-between">
@@ -96,7 +104,14 @@
   <script>
     const DOLLAR_RATE = 5.30;
 
+    let rawData = [];
     let allData = [];
+    let lastUpdatedAt = null;
+    const filterState = {
+      empresa: [],
+      pais: [],
+      nicho: []
+    };
     let appConfig = {
       dashboard_title: 'Dashboard de Operações'
     };
@@ -137,6 +152,95 @@
 
     function getOps(data) {
       return [...new Set(data.map(d => d.operacao))].sort();
+    }
+
+    function getOperationParts(op) {
+      const parts = String(op || '').trim().split(/\s+/);
+      return {
+        empresa: parts[0] || '',
+        pais: parts[1] || '',
+        nicho: parts[2] || ''
+      };
+    }
+
+    function getFilterOptions(data) {
+      const empresas = new Set();
+      const paises = new Set();
+      const nichos = new Set();
+
+      data.forEach(item => {
+        const p = getOperationParts(item.operacao);
+        if (p.empresa) empresas.add(p.empresa);
+        if (p.pais) paises.add(p.pais);
+        if (p.nicho) nichos.add(p.nicho);
+      });
+
+      return {
+        empresa: [...empresas].sort(),
+        pais: [...paises].sort(),
+        nicho: [...nichos].sort()
+      };
+    }
+
+    function applyFilters() {
+      allData = rawData.filter(item => {
+        const p = getOperationParts(item.operacao);
+        const okEmpresa = filterState.empresa.length === 0 || filterState.empresa.includes(p.empresa);
+        const okPais = filterState.pais.length === 0 || filterState.pais.includes(p.pais);
+        const okNicho = filterState.nicho.length === 0 || filterState.nicho.includes(p.nicho);
+        return okEmpresa && okPais && okNicho;
+      });
+
+      const hasData = allData.length > 0;
+      document.getElementById('empty-state').classList.toggle('hidden', hasData);
+      document.getElementById('dashboard').classList.toggle('hidden', !hasData);
+      document.getElementById('record-count').textContent = allData.length + ' registros';
+      document.getElementById('last-update').textContent = lastUpdatedAt ? 'Atualizado em: ' + fmtDateTime(lastUpdatedAt) : '-';
+
+      if (!hasData) {
+        lucide.createIcons();
+        return;
+      }
+
+      renderSummary();
+      renderOverallCharts();
+      renderOpsGrid();
+      lucide.createIcons();
+    }
+
+    function renderFilterDropdown(type, label, options) {
+      const selected = filterState[type];
+      const selectedText = selected.length > 0 ? selected.join(', ') : 'Todos';
+
+      return `
+        <details class="bg-white/5 rounded-lg p-2" data-filter="${type}">
+          <summary class="cursor-pointer list-none flex items-center justify-between text-sm text-gray-200">
+            <span>${label}</span>
+            <span class="text-xs text-indigo-300 truncate max-w-[70%] text-right">${selectedText}</span>
+          </summary>
+          <div class="mt-2">
+            <input type="text" data-filter-search="${type}" placeholder="Pesquisar..." class="w-full bg-[#11142b] border border-white/10 rounded px-2 py-1 text-xs text-gray-200 mb-2" />
+            <div class="max-h-32 overflow-y-auto space-y-1" data-filter-list="${type}">
+              ${options.map(opt => `
+                <label class="flex items-center gap-2 text-xs text-gray-300">
+                  <input type="checkbox" data-filter-checkbox="${type}" value="${opt}" ${selected.includes(opt) ? 'checked' : ''} />
+                  <span>${opt}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+        </details>
+      `;
+    }
+
+    function renderFilters() {
+      const opts = getFilterOptions(rawData);
+      const wrap = document.getElementById('filters-wrap');
+      wrap.innerHTML = [
+        renderFilterDropdown('empresa', 'Empresa', opts.empresa),
+        renderFilterDropdown('pais', 'País', opts.pais),
+        renderFilterDropdown('nicho', 'Nicho', opts.nicho)
+      ].join('');
     }
 
     function getVal(data, op, dados) {
@@ -546,24 +650,10 @@
     }
 
     function renderAll(data, updatedAt) {
-      allData = data || [];
-      const hasData = allData.length > 0;
-
-      document.getElementById('empty-state').classList.toggle('hidden', hasData);
-      document.getElementById('dashboard').classList.toggle('hidden', !hasData);
-
-      document.getElementById('record-count').textContent = allData.length + ' registros';
-      document.getElementById('last-update').textContent = updatedAt ? 'Atualizado em: ' + fmtDateTime(updatedAt) : '-';
-
-      if (!hasData) {
-        lucide.createIcons();
-        return;
-      }
-
-      renderSummary();
-      renderOverallCharts();
-      renderOpsGrid();
-      lucide.createIcons();
+      rawData = data || [];
+      lastUpdatedAt = updatedAt || null;
+      renderFilters();
+      applyFilters();
     }
 
     function loadData(showToast = false) {
@@ -617,6 +707,35 @@
       setTimeout(function() {
         btn.disabled = false;
       }, 600);
+    });
+
+    document.getElementById('filters-wrap').addEventListener('change', function(e) {
+      const type = e.target.getAttribute('data-filter-checkbox');
+      if (!type) return;
+      const values = [...document.querySelectorAll(`input[data-filter-checkbox="${type}"]:checked`)].map(el => el.value);
+      filterState[type] = values;
+      renderFilters();
+      applyFilters();
+    });
+
+    document.getElementById('filters-wrap').addEventListener('input', function(e) {
+      const type = e.target.getAttribute('data-filter-search');
+      if (!type) return;
+      const term = String(e.target.value || '').toLowerCase();
+      const list = e.target.closest('[data-filter]').querySelector(`[data-filter-list="${type}"]`);
+      if (!list) return;
+      [...list.querySelectorAll('label')].forEach(label => {
+        const txt = label.textContent.toLowerCase();
+        label.classList.toggle('hidden', !txt.includes(term));
+      });
+    });
+
+    document.getElementById('btn-clear-filters').addEventListener('click', function() {
+      filterState.empresa = [];
+      filterState.pais = [];
+      filterState.nicho = [];
+      renderFilters();
+      applyFilters();
     });
 
     loadData();
