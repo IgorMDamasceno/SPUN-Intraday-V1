@@ -71,7 +71,7 @@
         </div>
       </div>
 
-      <div class="card-glass rounded-xl p-4">
+      <div class="card-glass rounded-xl p-4 relative z-50 overflow-visible">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-sm font-semibold text-white">Filtros de Operação</h3>
           <button id="btn-clear-filters" class="text-xs text-indigo-300 hover:text-indigo-200">Limpar filtros</button>
@@ -231,7 +231,7 @@
             <span>${label}</span>
             <span class="text-xs text-indigo-300 truncate max-w-[70%] text-right">${selectedText}</span>
           </summary>
-          <div class="absolute left-0 right-0 top-full mt-2 z-40 bg-[#0f1228] border border-white/10 rounded-lg p-2 shadow-xl">
+          <div class="absolute left-0 right-0 top-full mt-2 z-[70] bg-[#0f1228] border border-white/10 rounded-lg p-2 shadow-xl">
             <input type="text" data-filter-search="${type}" placeholder="Pesquisar..." class="w-full bg-[#11142b] border border-white/10 rounded px-2 py-1 text-xs text-gray-200 mb-2" />
             <div class="max-h-32 overflow-y-auto space-y-1" data-filter-list="${type}">
               ${options.map(opt => `
