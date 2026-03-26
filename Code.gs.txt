@@ -1,5 +1,6 @@
 const SHEET_DATA = 'Base de Dados';
 const SHEET_CONFIG = 'Config';
+const SPREADSHEET_ID_PROPERTY = 'SPREADSHEET_ID';
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
@@ -8,7 +9,15 @@ function doGet() {
 }
 
 function getSpreadsheet_() {
-  return SpreadsheetApp.getActiveSpreadsheet();
+  const active = SpreadsheetApp.getActiveSpreadsheet();
+  if (active) return active;
+
+  const spreadsheetId = PropertiesService.getScriptProperties().getProperty(SPREADSHEET_ID_PROPERTY);
+  if (spreadsheetId) return SpreadsheetApp.openById(spreadsheetId);
+
+  throw new Error(
+    'Nenhuma planilha ativa encontrada. Defina a propriedade de script "SPREADSHEET_ID" com o ID da planilha.'
+  );
 }
 
 function getOrCreateSheet_(sheetName) {
@@ -90,50 +99,16 @@ function isHeaderRow_(row) {
   return c1 === 'operação' && c2 === 'dados' && c3 === 'valor';
 }
 
-function parseSingleCellBlock_(cellValue) {
-  const text = String(cellValue || '').trim();
-  if (!text) return [];
-
-  const hasTab = text.indexOf('\t') >= 0;
-  const hasBreak = text.indexOf('\n') >= 0 || text.indexOf('\\n') >= 0;
-  if (!hasTab || !hasBreak) return [];
-
-  const normalized = text.replace(/\\n/g, '\n');
-  const lines = normalized
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean);
-
-  if (lines.length === 0) return [];
-
-  const parsed = [];
-  lines.forEach((line, idx) => {
-    const cols = line.split('\t').map(v => String(v || '').trim());
-    if (cols.length < 3) return;
-
-    if (idx === 0) {
-      const headerCandidate = [cols[0], cols[1], cols[2]];
-      if (isHeaderRow_(headerCandidate)) return;
-    }
-
-    parsed.push({
-      operacao: cols[0],
-      dados: cols[1],
-      valor: parseValor_(cols[2])
-    });
-  });
-
-  return parsed;
-}
-
 function getAllData() {
   ensureStructure_();
 
   const sh = getSpreadsheet_().getSheetByName(SHEET_DATA);
+  if (!sh) return [];
+
   const lastRow = sh.getLastRow();
   if (lastRow < 1) return [];
 
-  const values = sh.getRange(1, 1, lastRow, 3).getValues();
+  const values = sh.getRange(1, 1, lastRow, 3).getDisplayValues();
   const startIndex = values.length > 0 && isHeaderRow_(values[0]) ? 1 : 0;
 
   const rows = [];
@@ -143,14 +118,6 @@ function getAllData() {
     const dados = String(row[1] || '').trim();
 
     if (!op && !dados && String(row[2] || '').trim() === '') continue;
-
-    if (!dados && String(row[2] || '').trim() === '') {
-      const parsedRows = parseSingleCellBlock_(row[0]);
-      if (parsedRows.length > 0) {
-        rows.push.apply(rows, parsedRows);
-      }
-      continue;
-    }
 
     if (!op) continue;
 
@@ -165,10 +132,20 @@ function getAllData() {
 }
 
 function syncData() {
-  return {
-    success: true,
-    data: getAllData(),
-    config: getConfig(),
-    updatedAt: new Date()
-  };
+  try {
+    return {
+      success: true,
+      data: getAllData(),
+      config: getConfig(),
+      updatedAt: new Date()
+    };
+  } catch (error) {
+    return {
+      success: false,
+      data: [],
+      config: { dashboard_title: 'Dashboard de Operações' },
+      updatedAt: new Date(),
+      error: error && error.message ? error.message : String(error)
+    };
+  }
 }

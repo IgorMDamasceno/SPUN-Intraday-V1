@@ -431,6 +431,13 @@
             return;
           }
 
+          if (result.success === false) {
+            console.error('syncData falhou:', result.error || 'Erro desconhecido');
+            alert('Erro ao carregar dados: ' + (result.error || 'Falha na sincronização.'));
+            renderAll([], result.updatedAt);
+            return;
+          }
+
           appConfig = result.config || appConfig;
           document.getElementById('main-title').textContent = appConfig.dashboard_title || 'Dashboard de Operações';
           renderAll(result.data || [], result.updatedAt);
