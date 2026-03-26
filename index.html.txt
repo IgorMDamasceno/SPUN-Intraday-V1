@@ -425,6 +425,7 @@
     function loadData(showToast = false) {
       google.script.run
         .withSuccessHandler(function(result) {
+          console.log('[dashboard] resposta syncData:', result);
           if (!result || typeof result !== 'object') {
             console.warn('syncData retornou resultado inválido:', result);
             renderAll([], null);
