@@ -65,12 +65,9 @@
         </div>
 
         <div class="card-glass rounded-xl p-4 fade-up fade-up-3">
-          <h3 class="text-xs font-semibold text-gray-300 mb-2">Gasto x ROAS</h3>
-          <div id="chart-roas" class="h-32 flex items-end gap-1"></div>
-          <div class="text-xs text-gray-500 mt-2 space-y-1">
-            <div class="flex justify-between"><span>Gasto Total</span><span id="roas-spent" class="text-red-400 font-medium">R$ 0</span></div>
-            <div class="flex justify-between"><span>ROAS Médio</span><span id="roas-value" class="text-amber-400 font-medium">-</span></div>
-          </div>
+          <h3 class="text-xs font-semibold text-gray-300 mb-2">Dispersão: Gasto x ROAS Aquisição</h3>
+          <div id="chart-roas" class="h-32"></div>
+          <div id="roas-legend" class="text-xs text-gray-500 mt-2"></div>
         </div>
       </div>
 
@@ -288,33 +285,61 @@
         </div>
       `;
 
-      const roasBars = [];
-      let maxRoas = 0;
-      ops.forEach(op => {
+      const scatterColors = ['#22c55e', '#6366f1', '#06b6d4', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#eab308'];
+      const scatterData = ops.map((op, idx) => {
         const m = getMetricsForOp(allData, op);
-        roasBars.push({ label: op, value: m.roas });
-        maxRoas = Math.max(maxRoas, m.roas);
+        const roasAq = m.aqG > 0 ? (m.aqR / m.aqG) : 0;
+        return { label: op, gasto: m.aqG, roasAq: roasAq, color: scatterColors[idx % scatterColors.length] };
       });
 
-      document.getElementById('chart-roas').innerHTML = roasBars.map(b => {
-        const h = maxRoas > 0 ? (b.value / maxRoas) * 100 : 0;
-        return `
-          <div class="flex-1 flex flex-col items-center gap-1">
-            <span class="text-[10px] text-gray-300 font-medium">${fmtRoaPct(b.value)}</span>
-            <div class="w-full rounded-sm ${b.value >= 1 ? 'bg-amber-500' : 'bg-red-500'}" style="height:${Math.max(h,3)}%"></div>
-            <span class="text-[8px] text-gray-500 truncate w-full text-center">${b.label}</span>
-          </div>
-        `;
+      const maxX = Math.max(1, ...scatterData.map(d => d.gasto));
+      const minYRaw = Math.min(...scatterData.map(d => d.roasAq), 0);
+      const maxYRaw = Math.max(...scatterData.map(d => d.roasAq), 1);
+      const paddingY = Math.max((maxYRaw - minYRaw) * 0.15, 0.2);
+      const minY = minYRaw - paddingY;
+      const maxY = maxYRaw + paddingY;
+      const spanY = Math.max(maxY - minY, 1);
+      const plotW = 270;
+      const plotH = 110;
+      const margin = { l: 26, r: 10, t: 8, b: 22 };
+      const innerW = plotW - margin.l - margin.r;
+      const innerH = plotH - margin.t - margin.b;
+
+      const points = scatterData.map(d => {
+        const x = margin.l + (d.gasto / maxX) * innerW;
+        const y = margin.t + innerH - ((d.roasAq - minY) / spanY) * innerH;
+        return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="${d.color}" opacity="0.95"></circle>`;
       }).join('');
 
-      let totalGasto = 0, totalRev = 0;
-      ops.forEach(op => {
-        const m = getMetricsForOp(allData, op);
-        totalGasto += m.aqG;
-        totalRev += m.totalRev;
-      });
-      document.getElementById('roas-spent').textContent = fmt(totalGasto);
-      document.getElementById('roas-value').textContent = totalGasto > 0 ? fmtRoaPct(totalRev / totalGasto) : '-';
+      const zeroY = margin.t + innerH - ((0 - minY) / spanY) * innerH;
+      document.getElementById('chart-roas').innerHTML = `
+        <svg viewBox="0 0 ${plotW} ${plotH}" class="w-full h-full">
+          <rect x="${margin.l}" y="${margin.t}" width="${innerW}" height="${innerH}" fill="transparent"></rect>
+          <line x1="${margin.l}" y1="${margin.t}" x2="${margin.l}" y2="${margin.t + innerH}" stroke="rgba(255,255,255,0.2)" stroke-width="1"></line>
+          <line x1="${margin.l}" y1="${margin.t + innerH}" x2="${margin.l + innerW}" y2="${margin.t + innerH}" stroke="rgba(255,255,255,0.2)" stroke-width="1"></line>
+          <line x1="${margin.l}" y1="${zeroY}" x2="${margin.l + innerW}" y2="${zeroY}" stroke="rgba(255,255,255,0.12)" stroke-dasharray="3 3" stroke-width="1"></line>
+          ${points}
+          <text x="${margin.l}" y="${margin.t - 1}" fill="#9ca3af" font-size="8">ROAS AQ (Y)</text>
+          <text x="${margin.l + innerW - 40}" y="${plotH - 4}" fill="#9ca3af" font-size="8">Gasto (X)</text>
+        </svg>
+      `;
+      document.getElementById('roas-legend').innerHTML = `
+        <div class="grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] text-gray-500 pb-1 border-b border-white/10">
+          <span>Operação</span><span>Gasto</span><span>ROAS AQ</span>
+        </div>
+        <div class="max-h-[98px] overflow-y-auto pr-1">
+          ${scatterData.map(d => `
+            <div class="grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] py-0.5 border-b border-white/5 items-center">
+              <div class="flex items-center gap-1 min-w-0">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${d.color}"></span>
+                <span class="text-gray-300 truncate">${d.label}</span>
+              </div>
+              <span class="text-gray-200 whitespace-nowrap">${fmt(d.gasto)}</span>
+              <span class="${d.roasAq >= 1 ? 'text-emerald-300' : 'text-red-300'} whitespace-nowrap">${fmtRoaPct(d.roasAq)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
     }
 
     function renderOpsGrid() {
