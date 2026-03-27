@@ -38,7 +38,15 @@
       </button>
     </header>
 
-    <div id="empty-state" class="flex-1 flex flex-col items-center justify-center px-4 text-center">
+    <div id="loading-state" class="flex-1 flex flex-col items-center justify-center px-4 text-center">
+      <div class="w-16 h-16 rounded-2xl bg-indigo-600/10 flex items-center justify-center mb-4 animate-pulse">
+        <i data-lucide="loader-circle" class="w-8 h-8 text-indigo-400 animate-spin"></i>
+      </div>
+      <h2 class="text-xl font-semibold text-white mb-2">Carregando dashboard...</h2>
+      <p class="text-gray-400 text-sm max-w-md">Sincronizando dados da planilha. Aguarde alguns segundos.</p>
+    </div>
+
+    <div id="empty-state" class="hidden flex-1 flex flex-col items-center justify-center px-4 text-center">
       <div class="w-16 h-16 rounded-2xl bg-indigo-600/10 flex items-center justify-center mb-4">
         <i data-lucide="database" class="w-8 h-8 text-indigo-400"></i>
       </div>
@@ -112,6 +120,7 @@
     let rawData = [];
     let allData = [];
     let lastUpdatedAt = null;
+    let isLoading = true;
     const filterState = {
       empresa: [],
       pais: [],
@@ -205,7 +214,8 @@
       });
 
       const hasData = allData.length > 0;
-      document.getElementById('empty-state').classList.toggle('hidden', hasData);
+      document.getElementById('loading-state').classList.toggle('hidden', !isLoading);
+      document.getElementById('empty-state').classList.toggle('hidden', isLoading || hasData);
       document.getElementById('dashboard').classList.toggle('hidden', !hasData);
       document.getElementById('record-count').textContent = allData.length + ' registros';
       document.getElementById('last-update').textContent = lastUpdatedAt ? 'Atualizado em: ' + fmtDateTime(lastUpdatedAt) : '-';
@@ -218,6 +228,16 @@
       renderSummary();
       renderOverallCharts();
       renderOpsGrid();
+      lucide.createIcons();
+    }
+
+    function setLoading(loading) {
+      isLoading = loading;
+      document.getElementById('loading-state').classList.toggle('hidden', !loading);
+      if (loading) {
+        document.getElementById('empty-state').classList.add('hidden');
+        document.getElementById('dashboard').classList.add('hidden');
+      }
       lucide.createIcons();
     }
 
@@ -697,6 +717,7 @@
     }
 
     function loadData(showToast = false) {
+      setLoading(true);
       google.script.run
         .withSuccessHandler(function(rawResult) {
           let result = rawResult;
@@ -712,6 +733,7 @@
           console.log('[dashboard] resposta syncData:', result);
           if (!result || typeof result !== 'object') {
             console.warn('syncData retornou resultado inválido:', result);
+            setLoading(false);
             renderAll([], null);
             return;
           }
@@ -719,10 +741,12 @@
           if (result.success === false) {
             console.error('syncData falhou:', result.error || 'Erro desconhecido');
             alert('Erro ao carregar dados: ' + (result.error || 'Falha na sincronização.'));
+            setLoading(false);
             renderAll([], result.updatedAt);
             return;
           }
 
+          setLoading(false);
           appConfig = result.config || appConfig;
           document.getElementById('main-title').textContent = appConfig.dashboard_title || 'Dashboard de Operações';
           renderAll(result.data || [], result.updatedAt);
@@ -736,6 +760,7 @@
         .withFailureHandler(function(err) {
           console.error(err);
           alert('Erro ao carregar dados: ' + (err.message || err));
+          setLoading(false);
         })
         .syncDataJson();
     }
