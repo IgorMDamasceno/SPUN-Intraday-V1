@@ -519,7 +519,7 @@
       grid.innerHTML = ops.map(op => {
         const m = getMetricsForOp(allData, op);
         const roasAQ = m.aqG > 0 ? m.aqR / m.aqG : 0;
-        const roasInv = m.aqG > 0 ? (m.aqR + m.reRe) / m.aqG : 0;
+        const roasInv = m.aqG > 0 ? (m.aqR + m.reRA) / m.aqG : 0;
         const totalRec = m.aqR + m.reRe;
 
         const totalForPie = Math.max(m.aqR + m.reRe, 1);
