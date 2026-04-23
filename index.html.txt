@@ -540,17 +540,19 @@
         const m = getMetricsForOp(allData, op);
         const roasAQ = m.aqG > 0 ? m.aqR / m.aqG : 0;
         const roasInv = m.aqG > 0 ? (m.aqR + m.reRA) / m.aqG : 0;
+        const rpsMedRet = m.reSes > 0 ? ((m.reRBUsd + m.reRAUsd + m.reRPUsd) / m.reSes) * 1000 : 0;
         const totalRec = m.aqR + m.reRe;
 
-        const totalForPie = Math.max(m.aqR + m.reRe, 1);
-        const aqPercent = (m.aqR / totalForPie * 100).toFixed(1);
-        const rePercent = (m.reRe / totalForPie * 100).toFixed(1);
+        const investBase = Math.max(m.aqG, 1);
+        const aqGainPct = (m.aqR / investBase) * 100;
+        const autoGainPct = (m.reRA / investBase) * 100;
+        const totalGainPct = aqGainPct + autoGainPct;
 
         const pieRadius = 65;
         const circumference = 2 * Math.PI * pieRadius;
-        const aqArc = (aqPercent / 100) * circumference;
-        const reArc = (rePercent / 100) * circumference;
-        const totalRecLabel = fmt(totalRec);
+        const aqArc = (Math.min(aqGainPct, 100) / 100) * circumference;
+        const autoArc = (Math.min(autoGainPct, 100) / 100) * circumference;
+        const totalRecLabel = fmtRoaPct((totalGainPct / 100) + 1);
         const centerTextClass = totalRecLabel.length > 16
           ? 'text-[9px] sm:text-[11px]'
           : totalRecLabel.length > 13
@@ -564,23 +566,24 @@
                 <circle cx="98" cy="98" r="${pieRadius}" fill="none" stroke="#1a1a2e" stroke-width="20"/>
                 <circle cx="98" cy="98" r="${pieRadius}" fill="none" stroke="#22c55e" stroke-width="20"
                       stroke-dasharray="${aqArc} ${circumference}" stroke-linecap="round"/>
-                <circle cx="98" cy="98" r="${pieRadius}" fill="none" stroke="#6366f1" stroke-width="20"
-                      stroke-dasharray="${reArc} ${circumference}" stroke-dashoffset="${-aqArc}" stroke-linecap="round"/>
+                <circle cx="98" cy="98" r="${pieRadius - 16}" fill="none" stroke="#f59e0b" stroke-width="14"
+                      stroke-dasharray="${autoArc} ${2 * Math.PI * (pieRadius - 16)}" stroke-linecap="round"/>
               </svg>
               <div class="absolute text-center px-4 max-w-[130px]">
                 <div class="${centerTextClass} font-bold text-white leading-tight whitespace-nowrap">${totalRecLabel}</div>
-                <div class="text-xs text-gray-400">Total</div>
+                <div class="text-xs text-gray-400">vs Invest.</div>
               </div>
             </div>
             <div class="text-xs space-y-2 min-w-[140px] sm:pt-3">
               <div class="flex items-center justify-between gap-3">
                 <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-green-500"></div><span class="text-gray-400">Aquisição</span></div>
-                <span class="text-white font-medium whitespace-nowrap">${fmt(m.aqR)} (${aqPercent}%)</span>
+                <span class="text-white font-medium whitespace-nowrap">${fmt(m.aqR)} (${aqGainPct.toFixed(1)}%)</span>
               </div>
               <div class="flex items-center justify-between gap-3">
-                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-indigo-500"></div><span class="text-gray-400">Retenção</span></div>
-                <span class="text-white font-medium whitespace-nowrap">${fmt(m.reRe)} (${rePercent}%)</span>
+                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-amber-500"></div><span class="text-gray-400">Automação</span></div>
+                <span class="text-white font-medium whitespace-nowrap">${fmt(m.reRA)} (${autoGainPct.toFixed(1)}%)</span>
               </div>
+              ${totalGainPct > 100 ? `<div class="text-[10px] text-amber-300">Acima de 100% do investimento</div>` : ''}
             </div>
           </div>
         `;
@@ -673,26 +676,33 @@
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
               <div class="bg-white/5 rounded-lg p-3">
-                <div class="text-xs text-gray-400 mb-1">Gasto Aquisição</div>
-                <div class="text-lg font-bold text-red-400">${fmt(m.aqG)}</div>
+                <div class="flex items-center gap-2 text-xs text-gray-400 mb-2"><i data-lucide="wallet" class="w-3.5 h-3.5 text-red-300"></i><span>Aquisição</span></div>
+                <div class="space-y-1">
+                  <div class="flex justify-between text-[11px]"><span class="text-gray-400">Gasto</span><span class="text-red-400 font-semibold">${fmt(m.aqG)}</span></div>
+                  <div class="flex justify-between text-[11px]"><span class="text-gray-400">Receita</span><span class="text-emerald-400 font-semibold">${fmt(m.aqR)}</span></div>
+                  <div class="flex justify-between text-[11px]"><span class="text-gray-400">ROAS</span><span class="${roasAQ >= 1 ? 'text-emerald-400' : 'text-red-400'} font-semibold">${fmtRoaPct(roasAQ)}</span></div>
+                </div>
               </div>
               <div class="bg-white/5 rounded-lg p-3">
-                <div class="text-xs text-gray-400 mb-1">Receita Aquisição</div>
-                <div class="text-lg font-bold text-emerald-400">${fmt(m.aqR)}</div>
+                <div class="flex items-center gap-2 text-xs text-gray-400 mb-1"><i data-lucide="repeat" class="w-3.5 h-3.5 text-indigo-300"></i><span>Receita Retenção</span></div>
+                <div class="text-lg font-bold text-indigo-300">${fmt(m.reRe)}</div>
               </div>
               <div class="bg-white/5 rounded-lg p-3">
-                <div class="text-xs text-gray-400 mb-1">ROAS Aquisição</div>
-                <div class="text-lg font-bold ${roasAQ >= 1 ? 'text-emerald-400' : 'text-red-400'}">${fmtRoaPct(roasAQ)}</div>
-              </div>
-              <div class="bg-white/5 rounded-lg p-3">
-                <div class="text-xs text-gray-400 mb-1">ROAS Investimento</div>
+                <div class="flex items-center gap-2 text-xs text-gray-400 mb-1"><i data-lucide="target" class="w-3.5 h-3.5 text-amber-300"></i><span>ROAS Investimento</span></div>
                 <div class="text-lg font-bold ${roasInv >= 1 ? 'text-emerald-400' : 'text-red-400'}">${fmtRoaPct(roasInv)}</div>
+              </div>
+              <div class="bg-white/5 rounded-lg p-3">
+                <div class="flex items-center gap-2 text-xs text-gray-400 mb-2"><i data-lucide="activity" class="w-3.5 h-3.5 text-cyan-300"></i><span>Retenção</span></div>
+                <div class="space-y-1">
+                  <div class="flex justify-between text-[11px]"><span class="text-gray-400">Sessões</span><span class="text-cyan-300 font-semibold">${fmtN(m.reSes)}</span></div>
+                  <div class="flex justify-between text-[11px]"><span class="text-gray-400">RPS Médio</span><span class="text-cyan-300 font-semibold">${fmtUSD(rpsMedRet)}</span></div>
+                </div>
               </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div>
-                <h4 class="text-xs font-semibold text-gray-300 mb-4">Receita (Aquisição + Retenção)</h4>
+                <h4 class="text-xs font-semibold text-gray-300 mb-4">Ganho por investimento</h4>
                 <div class="relative flex justify-center">${pieHTML}</div>
               </div>
               <div>
