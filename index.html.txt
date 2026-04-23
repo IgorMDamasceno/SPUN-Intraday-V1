@@ -38,7 +38,15 @@
       </button>
     </header>
 
-    <div id="empty-state" class="flex-1 flex flex-col items-center justify-center px-4 text-center">
+    <div id="loading-state" class="flex-1 flex flex-col items-center justify-center px-4 text-center">
+      <div class="w-16 h-16 rounded-2xl bg-indigo-600/10 flex items-center justify-center mb-4">
+        <div class="w-8 h-8 rounded-full border-2 border-indigo-400/30 border-t-indigo-400 animate-spin"></div>
+      </div>
+      <h2 class="text-xl font-semibold text-white mb-2">Carregando dashboard...</h2>
+      <p class="text-gray-400 text-sm max-w-md">Sincronizando dados da planilha. Aguarde alguns segundos.</p>
+    </div>
+
+    <div id="empty-state" class="hidden flex-1 flex flex-col items-center justify-center px-4 text-center">
       <div class="w-16 h-16 rounded-2xl bg-indigo-600/10 flex items-center justify-center mb-4">
         <i data-lucide="database" class="w-8 h-8 text-indigo-400"></i>
       </div>
@@ -49,34 +57,34 @@
     </div>
 
     <div id="dashboard" class="flex-1 px-4 sm:px-6 py-5 space-y-4 hidden">
-      <div id="summary-cards" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
+      <div id="summary-cards" class="grid grid-cols-2 lg:grid-cols-5 gap-3"></div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="card-glass rounded-xl p-4 fade-up fade-up-1">
-          <h3 class="text-xs font-semibold text-gray-300 mb-2">Receita Geral</h3>
-          <div id="chart-revenue" class="h-32 flex items-end gap-1"></div>
-          <div class="text-xs text-gray-500 mt-2 space-y-1">
-            <div class="flex justify-between"><span>AQ Total</span><span id="rev-aq" class="text-emerald-400 font-medium">R$ 0</span></div>
-            <div class="flex justify-between"><span>RE Total</span><span id="rev-re" class="text-indigo-400 font-medium">R$ 0</span></div>
-          </div>
+          <h3 class="text-xs font-semibold text-gray-300 mb-2">Gasto Geral por Operação</h3>
+          <div id="chart-revenue" class="h-32"></div>
+          <div id="revenue-legend" class="text-xs text-gray-500 mt-2"></div>
         </div>
 
         <div class="card-glass rounded-xl p-4 fade-up fade-up-2">
-          <h3 class="text-xs font-semibold text-gray-300 mb-2">Sessões Retenção</h3>
-          <div id="chart-sessions" class="h-32 flex items-end gap-1"></div>
-          <div class="text-xs text-gray-500 mt-2 space-y-1">
-            <div class="flex justify-between"><span>Total</span><span id="ses-total" class="text-cyan-400 font-medium">0</span></div>
-          </div>
+          <h3 class="text-xs font-semibold text-gray-300 mb-2">Lucro Geral por Operação</h3>
+          <div id="chart-sessions" class="h-32"></div>
+          <div id="lucro-legend" class="text-xs text-gray-500 mt-2"></div>
         </div>
 
         <div class="card-glass rounded-xl p-4 fade-up fade-up-3">
-          <h3 class="text-xs font-semibold text-gray-300 mb-2">Gasto x ROAS</h3>
-          <div id="chart-roas" class="h-32 flex items-end gap-1"></div>
-          <div class="text-xs text-gray-500 mt-2 space-y-1">
-            <div class="flex justify-between"><span>Gasto Total</span><span id="roas-spent" class="text-red-400 font-medium">R$ 0</span></div>
-            <div class="flex justify-between"><span>ROAS Médio</span><span id="roas-value" class="text-amber-400 font-medium">-</span></div>
-          </div>
+          <h3 class="text-xs font-semibold text-gray-300 mb-2">Dispersão: Gasto x ROAS Aquisição</h3>
+          <div id="chart-roas" class="h-32"></div>
+          <div id="roas-legend" class="text-xs text-gray-500 mt-2"></div>
         </div>
+      </div>
+
+      <div class="card-glass rounded-xl p-4 relative z-50 overflow-visible">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-white">Filtros de Operação</h3>
+          <button id="btn-clear-filters" class="text-xs text-indigo-300 hover:text-indigo-200">Limpar filtros</button>
+        </div>
+        <div id="filters-wrap" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
       </div>
 
       <div id="ops-grid" class="space-y-4"></div>
@@ -102,7 +110,22 @@
   </div>
 
   <script>
+    const DOLLAR_RATE = 5.30;
+    const OPERATION_COLORS = [
+      '#22c55e','#6366f1','#06b6d4','#f59e0b','#ef4444','#8b5cf6','#14b8a6','#eab308','#3b82f6','#ec4899',
+      '#84cc16','#0ea5e9','#f97316','#a855f7','#10b981','#f43f5e','#7c3aed','#0891b2','#65a30d','#2563eb',
+      '#dc2626','#d97706','#9333ea','#0d9488','#4f46e5','#db2777','#16a34a','#0284c7','#b45309','#7e22ce'
+    ];
+
+    let rawData = [];
     let allData = [];
+    let lastUpdatedAt = null;
+    let isLoading = true;
+    const filterState = {
+      empresa: [],
+      pais: [],
+      nicho: []
+    };
     let appConfig = {
       dashboard_title: 'Dashboard de Operações'
     };
@@ -118,6 +141,24 @@
       return Number(v || 0).toLocaleString('pt-BR');
     }
 
+    function fmtUSD(v) {
+      return '$' + Number(v || 0).toLocaleString('pt-BR', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1
+      });
+    }
+
+    function fmtRoaPct(roas) {
+      const pct = (Number(roas || 0) - 1) * 100;
+      return pct.toFixed(1).replace('.', ',') + '%';
+    }
+
+    function fmtSignedBRL(v) {
+      const n = Number(v || 0);
+      if (n < 0) return '- ' + fmt(Math.abs(n));
+      return fmt(n);
+    }
+
     function fmtDateTime(v) {
       const d = new Date(v);
       return d.toLocaleString('pt-BR');
@@ -127,289 +168,57 @@
       return [...new Set(data.map(d => d.operacao))].sort();
     }
 
-    function getVal(data, op, dados) {
-      const r = data.find(d => d.operacao === op && d.dados === dados);
-      return r ? Number(r.valor || 0) : 0;
+    function getOperationParts(op) {
+      const parts = String(op || '').trim().split(/\s+/);
+      return {
+        empresa: parts[0] || '',
+        pais: parts[1] || '',
+        nicho: parts[2] || ''
+      };
     }
 
-    function getMetricsForOp(data, op) {
-      const aqG = getVal(data, op, 'AQ - Gasto');
-      const aqR = getVal(data, op, 'AQ - Receita');
-      const reRB = getVal(data, op, 'RE - Receita - B');
-      const reRA = getVal(data, op, 'RE - Receita - A');
-      const reRP = getVal(data, op, 'RE - Receita - P');
-      const reRe = reRB + reRA + reRP;
-      const reSB = getVal(data, op, 'RE - Sessões - B');
-      const reSA = getVal(data, op, 'RE - Sessões - A');
-      const reSP = getVal(data, op, 'RE - Sessões - P');
-      const reSes = reSB + reSA + reSP;
-      const totalRev = aqR + reRe;
-      const roas = aqG > 0 ? totalRev / aqG : 0;
+    function getFilterOptions(data) {
+      const empresas = new Set();
+      const paises = new Set();
+      const nichos = new Set();
 
-      return { aqG, aqR, reRB, reRA, reRP, reRe, reSB, reSA, reSP, reSes, totalRev, roas };
+      data.forEach(item => {
+        const p = getOperationParts(item.operacao);
+        if (p.empresa) empresas.add(p.empresa);
+        if (p.pais) paises.add(p.pais);
+        if (p.nicho) nichos.add(p.nicho);
+      });
+
+      return {
+        empresa: [...empresas].sort(),
+        pais: [...paises].sort(),
+        nicho: [...nichos].sort()
+      };
     }
 
-    function renderSummary() {
-      const ops = getOps(allData);
-      let totalGasto = 0, totalReceitaAQ = 0, totalReceitaRE = 0, totalSessoes = 0;
-
-      ops.forEach(op => {
-        const m = getMetricsForOp(allData, op);
-        totalGasto += m.aqG;
-        totalReceitaAQ += m.aqR;
-        totalReceitaRE += m.reRe;
-        totalSessoes += m.reSes;
+    function getOperationColorMap(ops) {
+      const map = {};
+      ops.forEach((op, idx) => {
+        map[op] = OPERATION_COLORS[idx % OPERATION_COLORS.length];
       });
-
-      const totalReceitaTotal = totalReceitaAQ + totalReceitaRE;
-      const roasGeral = totalGasto > 0 ? totalReceitaTotal / totalGasto : 0;
-
-      const cards = [
-        { label: 'Gasto Total', value: fmt(totalGasto), icon: 'trending-down', color: 'text-red-400', bg: 'bg-red-500/10' },
-        { label: 'Receita Total', value: fmt(totalReceitaTotal), icon: 'trending-up', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-        { label: 'Sessões', value: fmtN(totalSessoes), icon: 'users', color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
-        { label: 'ROAS Geral', value: roasGeral.toFixed(2) + 'x', icon: 'target', color: 'text-amber-400', bg: 'bg-amber-500/10' }
-      ];
-
-      document.getElementById('summary-cards').innerHTML = cards.map((cd, i) => `
-        <div class="card-glass rounded-xl p-3 sm:p-4 fade-up fade-up-${i+1}">
-          <div class="flex items-center gap-2 mb-2">
-            <div class="w-7 h-7 rounded-lg ${cd.bg} flex items-center justify-center">
-              <i data-lucide="${cd.icon}" class="w-4 h-4 ${cd.color}"></i>
-            </div>
-            <span class="text-xs text-gray-400">${cd.label}</span>
-          </div>
-          <div class="text-lg sm:text-xl font-bold text-white">${cd.value}</div>
-        </div>
-      `).join('');
+      return map;
     }
 
-    function renderOverallCharts() {
-      const ops = getOps(allData);
-
-      const revBars = [];
-      let maxRev = 0;
-      ops.forEach(op => {
-        const m = getMetricsForOp(allData, op);
-        const total = m.aqR + m.reRe;
-        revBars.push({ label: op, value: total });
-        maxRev = Math.max(maxRev, total);
+    function applyFilters() {
+      allData = rawData.filter(item => {
+        const p = getOperationParts(item.operacao);
+        const okEmpresa = filterState.empresa.length === 0 || filterState.empresa.includes(p.empresa);
+        const okPais = filterState.pais.length === 0 || filterState.pais.includes(p.pais);
+        const okNicho = filterState.nicho.length === 0 || filterState.nicho.includes(p.nicho);
+        return okEmpresa && okPais && okNicho;
       });
 
-      document.getElementById('chart-revenue').innerHTML = revBars.map(b => {
-        const h = maxRev > 0 ? (b.value / maxRev) * 100 : 0;
-        return `
-          <div class="flex-1 flex flex-col items-center gap-1">
-            <span class="text-[10px] text-gray-300 font-medium">${fmt(b.value)}</span>
-            <div class="w-full rounded-sm bg-emerald-500" style="height:${Math.max(h,3)}%"></div>
-            <span class="text-[8px] text-gray-500 truncate w-full text-center">${b.label}</span>
-          </div>
-        `;
-      }).join('');
-
-      const sesBars = [];
-      let maxSes = 0;
-      ops.forEach(op => {
-        const m = getMetricsForOp(allData, op);
-        sesBars.push({ label: op, value: m.reSes });
-        maxSes = Math.max(maxSes, m.reSes);
-      });
-
-      document.getElementById('chart-sessions').innerHTML = sesBars.map(b => {
-        const h = maxSes > 0 ? (b.value / maxSes) * 100 : 0;
-        return `
-          <div class="flex-1 flex flex-col items-center gap-1">
-            <span class="text-[10px] text-gray-300 font-medium">${fmtN(b.value)}</span>
-            <div class="w-full rounded-sm bg-cyan-500" style="height:${Math.max(h,3)}%"></div>
-            <span class="text-[8px] text-gray-500 truncate w-full text-center">${b.label}</span>
-          </div>
-        `;
-      }).join('');
-
-      const roasBars = [];
-      let maxRoas = 0;
-      ops.forEach(op => {
-        const m = getMetricsForOp(allData, op);
-        roasBars.push({ label: op, value: m.roas });
-        maxRoas = Math.max(maxRoas, m.roas);
-      });
-
-      document.getElementById('chart-roas').innerHTML = roasBars.map(b => {
-        const h = maxRoas > 0 ? (b.value / maxRoas) * 100 : 0;
-        return `
-          <div class="flex-1 flex flex-col items-center gap-1">
-            <span class="text-[10px] text-gray-300 font-medium">${b.value.toFixed(1)}x</span>
-            <div class="w-full rounded-sm ${b.value >= 1 ? 'bg-amber-500' : 'bg-red-500'}" style="height:${Math.max(h,3)}%"></div>
-            <span class="text-[8px] text-gray-500 truncate w-full text-center">${b.label}</span>
-          </div>
-        `;
-      }).join('');
-
-      let totalAQ = 0, totalRE = 0, totalSes = 0, totalGasto = 0, totalRev = 0;
-      ops.forEach(op => {
-        const m = getMetricsForOp(allData, op);
-        totalAQ += m.aqR;
-        totalRE += m.reRe;
-        totalSes += m.reSes;
-        totalGasto += m.aqG;
-        totalRev += m.totalRev;
-      });
-
-      document.getElementById('rev-aq').textContent = fmt(totalAQ);
-      document.getElementById('rev-re').textContent = fmt(totalRE);
-      document.getElementById('ses-total').textContent = fmtN(totalSes);
-      document.getElementById('roas-spent').textContent = fmt(totalGasto);
-      document.getElementById('roas-value').textContent = totalGasto > 0 ? (totalRev / totalGasto).toFixed(2) + 'x' : '-';
-    }
-
-    function renderOpsGrid() {
-      const ops = getOps(allData);
-      const grid = document.getElementById('ops-grid');
-
-      grid.innerHTML = ops.map(op => {
-        const m = getMetricsForOp(allData, op);
-        const roasAQ = m.aqG > 0 ? m.aqR / m.aqG : 0;
-        const roasInv = m.aqG > 0 ? (m.aqR + m.reRe) / m.aqG : 0;
-        const totalRec = m.aqR + m.reRe;
-
-        const totalForPie = Math.max(m.aqR + m.reRe, 1);
-        const aqPercent = (m.aqR / totalForPie * 100).toFixed(1);
-        const rePercent = (m.reRe / totalForPie * 100).toFixed(1);
-
-        const pieRadius = 40;
-        const circumference = 2 * Math.PI * pieRadius;
-        const aqArc = (aqPercent / 100) * circumference;
-        const reArc = (rePercent / 100) * circumference;
-
-        const pieHTML = `
-          <div class="flex items-center justify-center">
-            <svg width="120" height="120" class="transform -rotate-90">
-              <circle cx="60" cy="60" r="${pieRadius}" fill="none" stroke="#1a1a2e" stroke-width="16"/>
-              <circle cx="60" cy="60" r="${pieRadius}" fill="none" stroke="#22c55e" stroke-width="16"
-                      stroke-dasharray="${aqArc} ${circumference}" stroke-linecap="round"/>
-              <circle cx="60" cy="60" r="${pieRadius}" fill="none" stroke="#6366f1" stroke-width="16"
-                      stroke-dasharray="${reArc} ${circumference}" stroke-dashoffset="${-aqArc}" stroke-linecap="round"/>
-            </svg>
-            <div class="absolute text-center">
-              <div class="text-sm font-bold text-white">${fmt(totalRec)}</div>
-              <div class="text-xs text-gray-400">Total</div>
-            </div>
-          </div>
-          <div class="text-xs space-y-1 mt-3">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-green-500"></div><span class="text-gray-400">AQ</span></div>
-              <span class="text-white font-medium">${fmt(m.aqR)} (${aqPercent}%)</span>
-            </div>
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-indigo-500"></div><span class="text-gray-400">RE</span></div>
-              <span class="text-white font-medium">${fmt(m.reRe)} (${rePercent}%)</span>
-            </div>
-          </div>
-        `;
-
-        const maxRet = Math.max(m.reRB, m.reRA, m.reRP, 1);
-        const rbPercent = (m.reRB / maxRet * 100).toFixed(0);
-        const raPercent = (m.reRA / maxRet * 100).toFixed(0);
-        const rpPercent = (m.reRP / maxRet * 100).toFixed(0);
-
-        const barsHTML = `
-          <div class="space-y-2">
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-xs text-gray-400">B</span>
-                <span class="text-xs font-medium text-white">${fmt(m.reRB)}</span>
-              </div>
-              <div class="w-full bg-gray-800 rounded h-4 overflow-hidden">
-                <div class="h-full bg-blue-600" style="width: ${rbPercent}%"></div>
-              </div>
-            </div>
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-xs text-gray-400">A</span>
-                <span class="text-xs font-medium text-white">${fmt(m.reRA)}</span>
-              </div>
-              <div class="w-full bg-gray-800 rounded h-4 overflow-hidden">
-                <div class="h-full bg-amber-600" style="width: ${raPercent}%"></div>
-              </div>
-            </div>
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-xs text-gray-400">P</span>
-                <span class="text-xs font-medium text-white">${fmt(m.reRP)}</span>
-              </div>
-              <div class="w-full bg-gray-800 rounded h-4 overflow-hidden">
-                <div class="h-full bg-cyan-600" style="width: ${rpPercent}%"></div>
-              </div>
-            </div>
-          </div>
-        `;
-
-        const sessionsHTML = `
-          <div class="space-y-1 text-xs">
-            <div class="flex justify-between"><span class="text-gray-400">B</span><span class="text-white font-medium">${fmtN(m.reSB)}</span></div>
-            <div class="flex justify-between"><span class="text-gray-400">A</span><span class="text-white font-medium">${fmtN(m.reSA)}</span></div>
-            <div class="flex justify-between"><span class="text-gray-400">P</span><span class="text-white font-medium">${fmtN(m.reSP)}</span></div>
-            <div class="border-t border-gray-700 pt-1 mt-1 flex justify-between font-semibold"><span>Total</span><span class="text-cyan-400">${fmtN(m.reSes)}</span></div>
-          </div>
-        `;
-
-        return `
-          <div class="card-glass rounded-xl p-5 fade-up fade-up-1">
-            <div class="flex items-center justify-between mb-5 pb-4 border-b border-white/10">
-              <h3 class="text-lg font-bold text-white">${op}</h3>
-              <div class="text-right">
-                <div class="text-xs text-gray-400">ROAS Geral</div>
-                <div class="text-2xl font-bold ${m.roas >= 1 ? 'text-emerald-400' : 'text-red-400'}">${m.roas.toFixed(2)}x</div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-              <div class="bg-white/5 rounded-lg p-3">
-                <div class="text-xs text-gray-400 mb-1">Gasto Aquisição</div>
-                <div class="text-lg font-bold text-red-400">${fmt(m.aqG)}</div>
-              </div>
-              <div class="bg-white/5 rounded-lg p-3">
-                <div class="text-xs text-gray-400 mb-1">Receita Aquisição</div>
-                <div class="text-lg font-bold text-emerald-400">${fmt(m.aqR)}</div>
-              </div>
-              <div class="bg-white/5 rounded-lg p-3">
-                <div class="text-xs text-gray-400 mb-1">ROAS AQ</div>
-                <div class="text-lg font-bold ${roasAQ >= 1 ? 'text-emerald-400' : 'text-red-400'}">${roasAQ.toFixed(2)}x</div>
-              </div>
-              <div class="bg-white/5 rounded-lg p-3">
-                <div class="text-xs text-gray-400 mb-1">ROAS Investimento</div>
-                <div class="text-lg font-bold ${roasInv >= 1 ? 'text-emerald-400' : 'text-red-400'}">${roasInv.toFixed(2)}x</div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div>
-                <h4 class="text-xs font-semibold text-gray-300 mb-4">Receita (AQ + RE)</h4>
-                <div class="relative flex justify-center">${pieHTML}</div>
-              </div>
-              <div>
-                <h4 class="text-xs font-semibold text-gray-300 mb-4">Receita Retenção (B/A/P)</h4>
-                ${barsHTML}
-              </div>
-              <div>
-                <h4 class="text-xs font-semibold text-gray-300 mb-4">Sessões (B/A/P)</h4>
-                ${sessionsHTML}
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    function renderAll(data, updatedAt) {
-      allData = data || [];
       const hasData = allData.length > 0;
-
-      document.getElementById('empty-state').classList.toggle('hidden', hasData);
+      document.getElementById('loading-state').classList.toggle('hidden', !isLoading);
+      document.getElementById('empty-state').classList.toggle('hidden', isLoading || hasData);
       document.getElementById('dashboard').classList.toggle('hidden', !hasData);
-
       document.getElementById('record-count').textContent = allData.length + ' registros';
-      document.getElementById('last-update').textContent = updatedAt ? 'Atualizado em: ' + fmtDateTime(updatedAt) : '-';
+      document.getElementById('last-update').textContent = lastUpdatedAt ? 'Atualizado em: ' + fmtDateTime(lastUpdatedAt) : '-';
 
       if (!hasData) {
         lucide.createIcons();
@@ -422,9 +231,547 @@
       lucide.createIcons();
     }
 
+    function setLoading(loading) {
+      isLoading = loading;
+      document.getElementById('loading-state').classList.toggle('hidden', !loading);
+      if (loading) {
+        document.getElementById('empty-state').classList.add('hidden');
+        document.getElementById('dashboard').classList.add('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    function toggleOperationFilter(op) {
+      const p = getOperationParts(op);
+      const sameEmpresa = filterState.empresa.length === 1 && filterState.empresa[0] === p.empresa;
+      const samePais = filterState.pais.length === 1 && filterState.pais[0] === p.pais;
+      const sameNicho = filterState.nicho.length === 1 && filterState.nicho[0] === p.nicho;
+      const isSame = sameEmpresa && samePais && sameNicho;
+
+      if (isSame) {
+        filterState.empresa = [];
+        filterState.pais = [];
+        filterState.nicho = [];
+      } else {
+        filterState.empresa = p.empresa ? [p.empresa] : [];
+        filterState.pais = p.pais ? [p.pais] : [];
+        filterState.nicho = p.nicho ? [p.nicho] : [];
+      }
+
+      renderFilters();
+      applyFilters();
+    }
+
+    function renderFilterDropdown(type, label, options) {
+      const selected = filterState[type];
+      const selectedText = selected.length > 0 ? selected.join(', ') : 'Todos';
+
+      return `
+        <details class="bg-white/5 rounded-lg p-2 relative" data-filter="${type}">
+          <summary class="cursor-pointer list-none flex items-center justify-between text-sm text-gray-200">
+            <span>${label}</span>
+            <span class="text-xs text-indigo-300 truncate max-w-[70%] text-right">${selectedText}</span>
+          </summary>
+          <div class="absolute left-0 right-0 top-full mt-2 z-[70] bg-[#0f1228] border border-white/10 rounded-lg p-2 shadow-xl">
+            <input type="text" data-filter-search="${type}" placeholder="Pesquisar..." class="w-full bg-[#11142b] border border-white/10 rounded px-2 py-1 text-xs text-gray-200 mb-2" />
+            <div class="max-h-32 overflow-y-auto space-y-1" data-filter-list="${type}">
+              ${options.map(opt => `
+                <label class="flex items-center gap-2 text-xs text-gray-300">
+                  <input type="checkbox" data-filter-checkbox="${type}" value="${opt}" ${selected.includes(opt) ? 'checked' : ''} />
+                  <span>${opt}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+        </details>
+      `;
+    }
+
+    function renderFilters() {
+      const opts = getFilterOptions(rawData);
+      const wrap = document.getElementById('filters-wrap');
+      wrap.innerHTML = [
+        renderFilterDropdown('empresa', 'Empresa', opts.empresa),
+        renderFilterDropdown('pais', 'País', opts.pais),
+        renderFilterDropdown('nicho', 'Nicho', opts.nicho)
+      ].join('');
+    }
+
+    function getVal(data, op, dados) {
+      const r = data.find(d => d.operacao === op && d.dados === dados);
+      return r ? Number(r.valor || 0) : 0;
+    }
+
+    function getMetricsForOp(data, op) {
+      const aqG = getVal(data, op, 'AQ - Gasto');
+      const aqR = getVal(data, op, 'AQ - Receita');
+      const reRBUsd = getVal(data, op, 'RE - Receita - B');
+      const reRAUsd = getVal(data, op, 'RE - Receita - A');
+      const reRPUsd = getVal(data, op, 'RE - Receita - P');
+      const reRB = reRBUsd * DOLLAR_RATE;
+      const reRA = reRAUsd * DOLLAR_RATE;
+      const reRP = reRPUsd * DOLLAR_RATE;
+      const reRe = reRB + reRA + reRP;
+      const reSB = getVal(data, op, 'RE - Sessões - B');
+      const reSA = getVal(data, op, 'RE - Sessões - A');
+      const reSP = getVal(data, op, 'RE - Sessões - P');
+      const reSes = reSB + reSA + reSP;
+      const totalRev = aqR + reRe;
+      const roas = aqG > 0 ? totalRev / aqG : 0;
+
+      return {
+        aqG, aqR,
+        reRBUsd, reRAUsd, reRPUsd,
+        reRB, reRA, reRP, reRe,
+        reSB, reSA, reSP, reSes,
+        totalRev, roas
+      };
+    }
+
+    function renderSummary() {
+      const ops = getOps(allData);
+      let totalGasto = 0, totalReceitaAQ = 0, totalReceitaRE = 0, totalSessoes = 0;
+      let totalSesB = 0, totalSesA = 0, totalSesP = 0;
+
+      ops.forEach(op => {
+        const m = getMetricsForOp(allData, op);
+        totalGasto += m.aqG;
+        totalReceitaAQ += m.aqR;
+        totalReceitaRE += m.reRe;
+        totalSessoes += m.reSes;
+        totalSesB += m.reSB;
+        totalSesA += m.reSA;
+        totalSesP += m.reSP;
+      });
+
+      const totalReceitaTotal = totalReceitaAQ + totalReceitaRE;
+      const lucroGeral = totalReceitaTotal - totalGasto;
+      const roasGeral = totalGasto > 0 ? totalReceitaTotal / totalGasto : 0;
+
+      const cards = [
+        { label: 'Gasto Total', value: fmt(totalGasto), icon: 'trending-down', color: 'text-red-400', bg: 'bg-red-500/10' },
+        { label: 'Receita Total', value: fmt(totalReceitaTotal), icon: 'trending-up', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+        { label: 'Lucro Geral', value: fmtSignedBRL(lucroGeral), icon: 'wallet', color: lucroGeral >= 0 ? 'text-emerald-400' : 'text-red-400', bg: 'bg-violet-500/10' },
+        { label: 'Sessões', value: fmtN(totalSessoes), icon: 'users', color: 'text-cyan-400', bg: 'bg-cyan-500/10', detail: `<span class="text-cyan-300 font-semibold">B:</span> <span class="font-semibold text-white">${fmtN(totalSesB)}</span>  <span class="text-amber-300 font-semibold">A:</span> <span class="font-semibold text-white">${fmtN(totalSesA)}</span>  <span class="text-indigo-300 font-semibold">P:</span> <span class="font-semibold text-white">${fmtN(totalSesP)}</span>` },
+        { label: 'ROAS Geral', value: fmtRoaPct(roasGeral), icon: 'target', color: 'text-amber-400', bg: 'bg-amber-500/10' }
+      ];
+
+      document.getElementById('summary-cards').innerHTML = cards.map((cd, i) => `
+        <div class="card-glass rounded-xl p-3 sm:p-4 fade-up fade-up-${i+1}">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-7 h-7 rounded-lg ${cd.bg} flex items-center justify-center">
+              <i data-lucide="${cd.icon}" class="w-4 h-4 ${cd.color}"></i>
+            </div>
+            <span class="text-xs text-gray-400">${cd.label}</span>
+          </div>
+          <div class="text-lg sm:text-xl font-bold text-white">${cd.value}</div>
+          ${cd.detail ? `<div class="text-[11px] text-gray-300 mt-1 leading-relaxed">${cd.detail}</div>` : ''}
+        </div>
+      `).join('');
+    }
+
+    function renderOverallCharts() {
+      const ops = getOps(allData);
+      const opColorMap = getOperationColorMap(ops);
+      const opsBySpendDesc = [...ops].sort((a, b) => {
+        const ma = getMetricsForOp(allData, a);
+        const mb = getMetricsForOp(allData, b);
+        return mb.aqG - ma.aqG;
+      });
+
+      const spendData = opsBySpendDesc.map((op) => {
+        const m = getMetricsForOp(allData, op);
+        return { label: op, value: m.aqG, color: opColorMap[op] };
+      }).filter(item => item.value > 0);
+
+      const totalSpend = spendData.reduce((acc, cur) => acc + cur.value, 0);
+      const stackedSegments = spendData.map(item => {
+        const pct = totalSpend > 0 ? (item.value / totalSpend) * 100 : 0;
+        return `
+          <div class="h-full cursor-pointer" data-op="${item.label}" style="width:${Math.max(pct, 1)}%;background:${item.color}" title="${item.label} | Gasto: ${fmt(item.value)} | ${pct.toFixed(1)}%"></div>
+        `;
+      }).join('');
+
+      const tableRows = spendData.map(item => {
+        const pct = totalSpend > 0 ? (item.value / totalSpend) * 100 : 0;
+        return `
+          <div class="grid grid-cols-[10px_1fr_auto_auto] items-center gap-2 text-[10px] py-0.5 border-b border-white/5 cursor-pointer" data-op="${item.label}">
+            <span class="w-2.5 h-2.5 rounded-full" style="background:${item.color}"></span>
+            <span class="text-gray-300 truncate">${item.label}</span>
+            <span class="text-gray-200 whitespace-nowrap">${fmt(item.value)}</span>
+            <span class="text-gray-400 whitespace-nowrap">${pct.toFixed(1)}%</span>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('chart-revenue').innerHTML = `
+        <div class="h-full flex items-center justify-between gap-2">
+          <div class="flex-1">
+            <div class="text-[10px] text-gray-400 mb-1">Distribuição percentual do gasto</div>
+            <div class="h-8 w-full rounded-md overflow-hidden bg-gray-900 border border-white/10 flex">
+              ${stackedSegments || '<div class="w-full h-full bg-gray-800"></div>'}
+            </div>
+          </div>
+          <div class="text-right pr-1">
+            <div class="text-[10px] text-gray-400">Operações</div>
+            <div class="text-2xl font-bold text-indigo-300">${ops.length}</div>
+          </div>
+        </div>
+      `;
+      document.getElementById('revenue-legend').innerHTML = `
+        <div class="grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] text-gray-500 pb-1 border-b border-white/10">
+          <span>Operação</span><span>Gasto</span><span>%</span>
+        </div>
+        <div class="max-h-[98px] overflow-y-auto pr-1">
+          ${tableRows || '<div class="text-[10px] text-gray-500 py-2">Sem gasto registrado.</div>'}
+        </div>
+      `;
+
+      const lucroData = opsBySpendDesc.map(op => {
+        const m = getMetricsForOp(allData, op);
+        return { label: op, value: m.totalRev - m.aqG };
+      });
+      const maxAbsLucro = Math.max(1, ...lucroData.map(i => Math.abs(i.value)));
+
+      document.getElementById('chart-sessions').innerHTML = `
+        <div class="h-full overflow-x-auto overflow-y-hidden">
+          <div class="h-full min-w-max flex items-end gap-2 pr-2">
+          ${lucroData.map((item, idx) => {
+            const magnitude = (Math.abs(item.value) / maxAbsLucro) * 42;
+            const isPositive = item.value >= 0;
+            return `
+              <div class="w-[72px] h-full flex flex-col items-center justify-center shrink-0 cursor-pointer" data-op="${item.label}">
+                <div class="text-[9px] ${isPositive ? 'text-emerald-300' : 'text-red-300'} whitespace-nowrap mb-1">${fmtSignedBRL(item.value)}</div>
+                <div class="relative w-full h-20">
+                  <div class="absolute left-0 right-0 top-1/2 border-t border-white/15"></div>
+                  <div class="absolute left-1/2 -translate-x-1/2 w-6 ${isPositive ? 'bg-emerald-500' : 'bg-red-500'} rounded-sm"
+                    style="${isPositive ? `bottom:50%;height:${Math.max(magnitude, 3)}%` : `top:50%;height:${Math.max(magnitude, 3)}%`}"></div>
+                </div>
+                <div class="text-[8px] text-gray-500 truncate w-full text-center">${item.label}</div>
+              </div>
+            `;
+          }).join('')}
+          </div>
+        </div>
+      `;
+      document.getElementById('lucro-legend').innerHTML = `
+        <div class="grid grid-cols-[1fr_auto] gap-2 text-[10px] text-gray-500 pb-1 border-b border-white/10">
+          <span>Operação</span><span>Lucro</span>
+        </div>
+        <div class="max-h-[98px] overflow-y-auto pr-1">
+          ${lucroData.map(item => `
+            <div class="grid grid-cols-[1fr_auto] gap-2 text-[10px] py-0.5 border-b border-white/5 cursor-pointer" data-op="${item.label}">
+              <span class="text-gray-300 truncate">${item.label}</span>
+              <span class="${item.value >= 0 ? 'text-emerald-300' : 'text-red-300'} whitespace-nowrap">${fmtSignedBRL(item.value)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      const scatterData = opsBySpendDesc.map((op) => {
+        const m = getMetricsForOp(allData, op);
+        const roasAq = m.aqG > 0 ? (m.aqR / m.aqG) : 0;
+        const roasPct = (roasAq - 1) * 100;
+        return { label: op, gasto: m.aqG, roasAq: roasAq, roasPct: roasPct, color: opColorMap[op] };
+      });
+
+      const maxX = Math.max(1, ...scatterData.map(d => d.gasto));
+      const minY = -50;
+      const maxY = 25;
+      const spanY = Math.max(maxY - minY, 1);
+      const plotW = 270;
+      const plotH = 110;
+      const margin = { l: 26, r: 10, t: 8, b: 22 };
+      const innerW = plotW - margin.l - margin.r;
+      const innerH = plotH - margin.t - margin.b;
+
+      const points = scatterData.map(d => {
+        const x = margin.l + (d.gasto / maxX) * innerW;
+        const y = margin.t + innerH - ((d.roasPct - minY) / spanY) * innerH;
+        return `
+          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6.5" fill="transparent" data-op="${d.label}">
+            <title>${d.label} | Gasto: ${fmt(d.gasto)} | ROAS AQ: ${fmtRoaPct(d.roasAq)}</title>
+          </circle>
+          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="${d.color}" opacity="0.95" data-op="${d.label}">
+            <title>${d.label} | Gasto: ${fmt(d.gasto)} | ROAS AQ: ${fmtRoaPct(d.roasAq)}</title>
+          </circle>
+        `;
+      }).join('');
+
+      const zeroY = margin.t + innerH - ((0 - minY) / spanY) * innerH;
+      document.getElementById('chart-roas').innerHTML = `
+        <svg viewBox="0 0 ${plotW} ${plotH}" class="w-full h-full">
+          <rect x="${margin.l}" y="${margin.t}" width="${innerW}" height="${innerH}" fill="transparent"></rect>
+          <line x1="${margin.l}" y1="${margin.t}" x2="${margin.l}" y2="${margin.t + innerH}" stroke="rgba(255,255,255,0.2)" stroke-width="1"></line>
+          <line x1="${margin.l}" y1="${margin.t + innerH}" x2="${margin.l + innerW}" y2="${margin.t + innerH}" stroke="rgba(255,255,255,0.2)" stroke-width="1"></line>
+          <line x1="${margin.l}" y1="${zeroY}" x2="${margin.l + innerW}" y2="${zeroY}" stroke="rgba(255,255,255,0.12)" stroke-dasharray="3 3" stroke-width="1"></line>
+          ${points}
+          <text x="${margin.l}" y="${margin.t - 1}" fill="#9ca3af" font-size="8">ROAS AQ (Y)</text>
+          <text x="${margin.l + innerW - 40}" y="${plotH - 4}" fill="#9ca3af" font-size="8">Gasto (X)</text>
+          <text x="1" y="${margin.t + 8}" fill="#9ca3af" font-size="7">25%</text>
+          <text x="1" y="${zeroY + 2}" fill="#9ca3af" font-size="7">0%</text>
+          <text x="1" y="${margin.t + innerH}" fill="#9ca3af" font-size="7">-50%</text>
+        </svg>
+      `;
+      document.getElementById('roas-legend').innerHTML = `
+        <div class="grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] text-gray-500 pb-1 border-b border-white/10">
+          <span>Operação</span><span>Gasto</span><span>ROAS AQ</span>
+        </div>
+        <div class="max-h-[98px] overflow-y-auto pr-1">
+          ${scatterData.map(d => `
+            <div class="grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] py-0.5 border-b border-white/5 items-center cursor-pointer" data-op="${d.label}">
+              <div class="flex items-center gap-1 min-w-0">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${d.color}"></span>
+                <span class="text-gray-300 truncate">${d.label}</span>
+              </div>
+              <span class="text-gray-200 whitespace-nowrap">${fmt(d.gasto)}</span>
+              <span class="${d.roasAq >= 1 ? 'text-emerald-300' : 'text-red-300'} whitespace-nowrap">${fmtRoaPct(d.roasAq)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function renderOpsGrid() {
+      const ops = getOps(allData);
+      const grid = document.getElementById('ops-grid');
+
+      grid.innerHTML = ops.map(op => {
+        const m = getMetricsForOp(allData, op);
+        const roasAQ = m.aqG > 0 ? m.aqR / m.aqG : 0;
+        const roasInv = m.aqG > 0 ? (m.aqR + m.reRA) / m.aqG : 0;
+        const rpsMedRet = m.reSes > 0 ? ((m.reRBUsd + m.reRAUsd + m.reRPUsd) / m.reSes) * 1000 : 0;
+        const totalRec = m.aqR + m.reRe;
+
+        const investBase = Math.max(m.aqG, 1);
+        const aqGainPct = (m.aqR / investBase) * 100;
+        const autoGainPct = (m.reRA / investBase) * 100;
+        const totalGainPct = aqGainPct + autoGainPct;
+
+        const pieRadius = 65;
+        const circumference = 2 * Math.PI * pieRadius;
+        const aqArc = (Math.min(aqGainPct, 100) / 100) * circumference;
+        const autoArc = (Math.min(autoGainPct, 100) / 100) * circumference;
+        const totalRecLabel = fmtRoaPct((totalGainPct / 100) + 1);
+        const centerTextClass = totalRecLabel.length > 16
+          ? 'text-[9px] sm:text-[11px]'
+          : totalRecLabel.length > 13
+            ? 'text-[10px] sm:text-xs'
+            : 'text-sm sm:text-base';
+
+        const pieHTML = `
+          <div class="flex flex-col sm:flex-row items-center sm:items-start justify-center gap-4">
+            <div class="relative flex items-center justify-center shrink-0">
+              <svg width="196" height="196" class="transform -rotate-90">
+                <circle cx="98" cy="98" r="${pieRadius}" fill="none" stroke="#1a1a2e" stroke-width="20"/>
+                <circle cx="98" cy="98" r="${pieRadius}" fill="none" stroke="#22c55e" stroke-width="20"
+                      stroke-dasharray="${aqArc} ${circumference}" stroke-linecap="round"/>
+                <circle cx="98" cy="98" r="${pieRadius - 16}" fill="none" stroke="#f59e0b" stroke-width="14"
+                      stroke-dasharray="${autoArc} ${2 * Math.PI * (pieRadius - 16)}" stroke-linecap="round"/>
+              </svg>
+              <div class="absolute text-center px-4 max-w-[130px]">
+                <div class="${centerTextClass} font-bold text-white leading-tight whitespace-nowrap">${totalRecLabel}</div>
+                <div class="text-xs text-gray-400">vs Invest.</div>
+              </div>
+            </div>
+            <div class="text-xs space-y-2 min-w-[140px] sm:pt-3">
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-green-500"></div><span class="text-gray-400">Aquisição</span></div>
+                <span class="text-white font-medium whitespace-nowrap">${fmt(m.aqR)} (${aqGainPct.toFixed(1)}%)</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-amber-500"></div><span class="text-gray-400">Automação</span></div>
+                <span class="text-white font-medium whitespace-nowrap">${fmt(m.reRA)} (${autoGainPct.toFixed(1)}%)</span>
+              </div>
+              ${totalGainPct > 100 ? `<div class="text-[10px] text-amber-300">Acima de 100% do investimento</div>` : ''}
+            </div>
+          </div>
+        `;
+
+        const totalRet = Math.max(m.reRB + m.reRA + m.reRP, 1);
+        const rbPercent = (m.reRB / totalRet * 100);
+        const raPercent = (m.reRA / totalRet * 100);
+        const rpPercent = (m.reRP / totalRet * 100);
+
+        function retentionBar(label, value, percent, colorClass) {
+          const pct = percent.toFixed(1);
+          const width = Math.max(percent, 14);
+          return `
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs text-gray-400">${label}</span>
+                <span class="text-xs font-medium text-white">${fmt(value)}</span>
+              </div>
+              <div class="w-full bg-gray-800 rounded h-6 overflow-hidden relative">
+                <div class="h-full ${colorClass} flex items-center justify-end pr-2" style="width: ${width}%">
+                  <span class="text-[10px] font-semibold text-white">${pct}%</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        const barsHTML = `
+          <div class="space-y-2">
+            ${retentionBar('Broadcast', m.reRB, rbPercent, 'bg-blue-600')}
+            ${retentionBar('Automação', m.reRA, raPercent, 'bg-amber-600')}
+            ${retentionBar('Push', m.reRP, rpPercent, 'bg-cyan-600')}
+          </div>
+        `;
+
+        const maxSesBar = Math.max(m.reSB, m.reSA, m.reSP, 1);
+        const rpsB = m.reSB > 0 ? (m.reRBUsd / m.reSB) * 1000 : 0;
+        const rpsA = m.reSA > 0 ? (m.reRAUsd / m.reSA) * 1000 : 0;
+        const rpsP = m.reSP > 0 ? (m.reRPUsd / m.reSP) * 1000 : 0;
+        const maxRpsBar = Math.max(rpsB, rpsA, rpsP, 1);
+        const sesBars = [
+          { label: 'Broadcast', sessoes: m.reSB, rps: rpsB, colorSessions: 'bg-blue-600', colorRps: 'bg-blue-300' },
+          { label: 'Automação', sessoes: m.reSA, rps: rpsA, colorSessions: 'bg-amber-600', colorRps: 'bg-amber-300' },
+          { label: 'Push', sessoes: m.reSP, rps: rpsP, colorSessions: 'bg-cyan-600', colorRps: 'bg-cyan-300' }
+        ];
+
+        const sessionsHTML = `
+          <div>
+            <div class="h-44 flex items-end justify-around gap-2 mb-1">
+              ${sesBars.map(sb => {
+                const heightSessions = ((sb.sessoes / maxSesBar) * 68) + 6;
+                const heightRps = ((sb.rps / maxRpsBar) * 68) + 6;
+                const labelBottomSessions = Math.min(heightSessions + 2, 84);
+                const labelBottomRps = Math.min(heightRps + 2, 84);
+                return `
+                  <div class="flex-1 max-w-[112px] flex flex-col items-center gap-1">
+                    <div class="text-[10px] text-gray-400 font-semibold">${sb.label}</div>
+                    <div class="w-full h-30 flex items-end justify-center gap-2 px-1 pb-1">
+                      <div class="w-9 flex flex-col items-center justify-end gap-1">
+                        <div class="w-full h-24 relative flex items-end">
+                          <span class="absolute left-1/2 -translate-x-1/2 text-[10px] text-gray-200 font-medium leading-none whitespace-nowrap" style="bottom: calc(${labelBottomSessions}% + 3px)">${fmtN(sb.sessoes)}</span>
+                          <div class="w-full ${sb.colorSessions} rounded-t-sm" style="height:${Math.max(heightSessions, 4)}%"></div>
+                        </div>
+                        <span class="text-[10px] text-gray-400">Sessões</span>
+                      </div>
+                      <div class="w-9 flex flex-col items-center justify-end gap-1">
+                        <div class="w-full h-24 relative flex items-end">
+                          <span class="absolute left-1/2 -translate-x-1/2 text-[10px] text-gray-200 font-medium leading-none whitespace-nowrap" style="bottom: calc(${labelBottomRps}% + 3px)">${fmtUSD(sb.rps)}</span>
+                          <div class="w-full ${sb.colorRps} rounded-t-sm" style="height:${Math.max(heightRps, 4)}%"></div>
+                        </div>
+                        <span class="text-[10px] text-gray-400">RPS</span>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+
+        return `
+          <div class="card-glass rounded-xl p-5 fade-up fade-up-1">
+            <div class="flex items-center justify-between mb-5 pb-4 border-b border-white/10">
+              <h3 class="text-lg font-bold text-white">${op}</h3>
+              <div class="text-right">
+                <div class="text-xs text-gray-400">Lucro Geral</div>
+                <div class="text-xl font-bold ${m.totalRev - m.aqG >= 0 ? 'text-emerald-400' : 'text-red-400'} whitespace-nowrap">${fmtSignedBRL(m.totalRev - m.aqG)} / ${fmtRoaPct(m.roas)}</div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+              <div class="bg-white/5 rounded-lg p-3">
+                <div class="flex items-center gap-2 text-xs text-gray-400 mb-2"><i data-lucide="wallet" class="w-3.5 h-3.5 text-red-300"></i><span>Aquisição</span></div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div class="text-center">
+                    <div class="text-[10px] text-gray-400">Gasto</div>
+                    <div class="text-[11px] font-semibold text-red-400 whitespace-nowrap">${fmt(m.aqG)}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-[10px] text-gray-400">Receita</div>
+                    <div class="text-[11px] font-semibold text-emerald-400 whitespace-nowrap">${fmt(m.aqR)}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-[10px] text-gray-400">ROAS</div>
+                    <div class="text-[11px] font-semibold ${roasAQ >= 1 ? 'text-emerald-400' : 'text-red-400'} whitespace-nowrap">${fmtRoaPct(roasAQ)}</div>
+                  </div>
+                </div>
+              </div>
+              <div class="bg-white/5 rounded-lg p-3">
+                <div class="flex items-center gap-2 text-xs text-gray-400 mb-1"><i data-lucide="repeat" class="w-3.5 h-3.5 text-indigo-300"></i><span>Receita Retenção</span></div>
+                <div class="text-lg font-bold text-indigo-300">${fmt(m.reRe)}</div>
+              </div>
+              <div class="bg-white/5 rounded-lg p-3">
+                <div class="flex items-center gap-2 text-xs text-gray-400 mb-1"><i data-lucide="target" class="w-3.5 h-3.5 text-amber-300"></i><span>ROAS Investimento</span></div>
+                <div class="text-lg font-bold ${roasInv >= 1 ? 'text-emerald-400' : 'text-red-400'}">${fmtRoaPct(roasInv)}</div>
+              </div>
+              <div class="bg-white/5 rounded-lg p-3">
+                <div class="flex items-center gap-2 text-xs text-gray-400 mb-2"><i data-lucide="activity" class="w-3.5 h-3.5 text-cyan-300"></i><span>Retenção</span></div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="text-center">
+                    <div class="text-[10px] text-gray-400">Sessões</div>
+                    <div class="text-[11px] font-semibold text-cyan-300 whitespace-nowrap">${fmtN(m.reSes)}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-[10px] text-gray-400">RPS Médio</div>
+                    <div class="text-[11px] font-semibold text-cyan-300 whitespace-nowrap">${fmtUSD(rpsMedRet)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div>
+                <h4 class="text-xs font-semibold text-gray-300 mb-4">Ganho por investimento</h4>
+                <div class="relative flex justify-center">${pieHTML}</div>
+              </div>
+              <div>
+                <h4 class="text-xs font-semibold text-gray-300 mb-4">Receita Retenção</h4>
+                ${barsHTML}
+              </div>
+              <div>
+                <h4 class="text-xs font-semibold text-gray-300 mb-4">Sessões e RPS - Retenção</h4>
+                ${sessionsHTML}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderAll(data, updatedAt) {
+      rawData = data || [];
+      lastUpdatedAt = updatedAt || null;
+      renderFilters();
+      applyFilters();
+    }
+
     function loadData(showToast = false) {
+      setLoading(true);
       google.script.run
-        .withSuccessHandler(function(result) {
+        .withSuccessHandler(function(rawResult) {
+          let result = rawResult;
+          if (typeof rawResult === 'string') {
+            try {
+              result = JSON.parse(rawResult);
+            } catch (e) {
+              console.error('Falha ao parsear syncDataJson:', e, rawResult);
+              result = null;
+            }
+          }
+
+          console.log('[dashboard] resposta syncData:', result);
+          if (!result || typeof result !== 'object') {
+            console.warn('syncData retornou resultado inválido:', result);
+            setLoading(false);
+            renderAll([], null);
+            return;
+          }
+
+          if (result.success === false) {
+            console.error('syncData falhou:', result.error || 'Erro desconhecido');
+            alert('Erro ao carregar dados: ' + (result.error || 'Falha na sincronização.'));
+            setLoading(false);
+            renderAll([], result.updatedAt);
+            return;
+          }
+
+          setLoading(false);
           appConfig = result.config || appConfig;
           document.getElementById('main-title').textContent = appConfig.dashboard_title || 'Dashboard de Operações';
           renderAll(result.data || [], result.updatedAt);
@@ -438,8 +785,9 @@
         .withFailureHandler(function(err) {
           console.error(err);
           alert('Erro ao carregar dados: ' + (err.message || err));
+          setLoading(false);
         })
-        .syncData();
+        .syncDataJson();
     }
 
     document.getElementById('btn-sync').addEventListener('click', function() {
@@ -449,6 +797,63 @@
       setTimeout(function() {
         btn.disabled = false;
       }, 600);
+    });
+
+    document.getElementById('filters-wrap').addEventListener('change', function(e) {
+      const type = e.target.getAttribute('data-filter-checkbox');
+      if (!type) return;
+      const values = [...document.querySelectorAll(`input[data-filter-checkbox="${type}"]:checked`)].map(el => el.value);
+      filterState[type] = values;
+    });
+
+    document.getElementById('filters-wrap').addEventListener('input', function(e) {
+      const type = e.target.getAttribute('data-filter-search');
+      if (!type) return;
+      const term = String(e.target.value || '').toLowerCase();
+      const list = e.target.closest('[data-filter]').querySelector(`[data-filter-list="${type}"]`);
+      if (!list) return;
+      [...list.querySelectorAll('label')].forEach(label => {
+        const txt = label.textContent.toLowerCase();
+        label.classList.toggle('hidden', !txt.includes(term));
+      });
+    });
+
+    document.getElementById('btn-clear-filters').addEventListener('click', function() {
+      filterState.empresa = [];
+      filterState.pais = [];
+      filterState.nicho = [];
+      renderFilters();
+      applyFilters();
+    });
+
+    document.getElementById('filters-wrap').addEventListener('toggle', function(e) {
+      if (e.target.tagName !== 'DETAILS') return;
+      if (!e.target.open) {
+        renderFilters();
+        applyFilters();
+      }
+    }, true);
+
+    document.addEventListener('click', function(e) {
+      const wrap = document.getElementById('filters-wrap');
+      if (wrap.contains(e.target)) return;
+      let hadOpen = false;
+      wrap.querySelectorAll('details[open]').forEach(d => {
+        d.open = false;
+        hadOpen = true;
+      });
+      if (hadOpen) {
+        renderFilters();
+        applyFilters();
+      }
+    });
+
+    ['chart-revenue', 'revenue-legend', 'chart-sessions', 'lucro-legend', 'chart-roas', 'roas-legend'].forEach(id => {
+      document.getElementById(id).addEventListener('click', function(e) {
+        const el = e.target.closest('[data-op]');
+        if (!el) return;
+        toggleOperationFilter(el.getAttribute('data-op'));
+      });
     });
 
     loadData();

@@ -1,5 +1,7 @@
 const SHEET_DATA = 'Base de Dados';
 const SHEET_CONFIG = 'Config';
+const SPREADSHEET_ID_PROPERTY = 'SPREADSHEET_ID';
+const DEBUG_PROPERTY = 'DASH_DEBUG';
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
@@ -8,7 +10,40 @@ function doGet() {
 }
 
 function getSpreadsheet_() {
-  return SpreadsheetApp.getActiveSpreadsheet();
+  const active = SpreadsheetApp.getActiveSpreadsheet();
+  if (active) {
+    logDebug_('getSpreadsheet_: usando planilha ativa', { id: active.getId(), name: active.getName() });
+    return active;
+  }
+
+  const spreadsheetId = PropertiesService.getScriptProperties().getProperty(SPREADSHEET_ID_PROPERTY);
+  if (spreadsheetId) {
+    const byId = SpreadsheetApp.openById(spreadsheetId);
+    logDebug_('getSpreadsheet_: usando SPREADSHEET_ID', { id: byId.getId(), name: byId.getName() });
+    return byId;
+  }
+
+  throw new Error(
+    'Nenhuma planilha ativa encontrada. Defina a propriedade de script "SPREADSHEET_ID" com o ID da planilha.'
+  );
+}
+
+function isDebugEnabled_() {
+  const value = PropertiesService.getScriptProperties().getProperty(DEBUG_PROPERTY);
+  return String(value || '').toLowerCase() === 'true';
+}
+
+function logDebug_(message, payload) {
+  if (!isDebugEnabled_()) return;
+  let serialized = '';
+  if (payload !== undefined) {
+    try {
+      serialized = ' | ' + JSON.stringify(payload);
+    } catch (e) {
+      serialized = ' | [payload_não_serializável]';
+    }
+  }
+  Logger.log('[DASH_DEBUG] ' + message + serialized);
 }
 
 function getOrCreateSheet_(sheetName) {
@@ -20,8 +55,10 @@ function getOrCreateSheet_(sheetName) {
 
 function ensureStructure_() {
   const sh = getOrCreateSheet_(SHEET_DATA);
+  logDebug_('ensureStructure_: estado Base de Dados', { lastRow: sh.getLastRow(), lastColumn: sh.getLastColumn() });
   if (sh.getLastRow() === 0) {
     sh.getRange(1, 1, 1, 3).setValues([['Operação', 'Dados', 'Valor']]);
+    logDebug_('ensureStructure_: cabeçalho Base de Dados criado');
   }
 
   const config = getOrCreateSheet_(SHEET_CONFIG);
@@ -37,7 +74,7 @@ function getConfig() {
   ensureStructure_();
 
   const sh = getSpreadsheet_().getSheetByName(SHEET_CONFIG);
-  const values = sh.getDataRange().getValues();
+  const values = sh.getDataRange().getDisplayValues();
   const config = {};
 
   for (let i = 1; i < values.length; i++) {
@@ -51,30 +88,119 @@ function getConfig() {
   };
 }
 
+function parseValor_(rawValue) {
+  if (typeof rawValue === 'number') {
+    return isNaN(rawValue) ? 0 : rawValue;
+  }
+
+  const text = String(rawValue || '').trim();
+  if (!text) return 0;
+
+  const normalized = text
+    .replace(/[R$\s]/g, '')
+    .replace(/\u00A0/g, '')
+    .replace(/[^0-9,.\-]/g, '');
+
+  if (!normalized) return 0;
+
+  const hasComma = normalized.includes(',');
+  const hasDot = normalized.includes('.');
+
+  if (hasComma && hasDot) {
+    const ptBr = Number(normalized.replace(/\./g, '').replace(',', '.'));
+    if (!isNaN(ptBr)) return ptBr;
+  }
+
+  if (hasComma && !hasDot) {
+    const commaOnly = Number(normalized.replace(',', '.'));
+    if (!isNaN(commaOnly)) return commaOnly;
+  }
+
+  const fallback = Number(normalized);
+  return isNaN(fallback) ? 0 : fallback;
+}
+
+function isHeaderRow_(row) {
+  const c1 = String(row[0] || '').trim().toLowerCase();
+  const c2 = String(row[1] || '').trim().toLowerCase();
+  const c3 = String(row[2] || '').trim().toLowerCase();
+  return c1 === 'operação' && c2 === 'dados' && c3 === 'valor';
+}
+
 function getAllData() {
   ensureStructure_();
 
   const sh = getSpreadsheet_().getSheetByName(SHEET_DATA);
+  if (!sh) return [];
+
   const lastRow = sh.getLastRow();
+  if (lastRow < 1) return [];
 
-  if (lastRow < 2) return [];
+  const values = sh.getRange(1, 1, lastRow, 3).getDisplayValues();
+  const startIndex = values.length > 0 && isHeaderRow_(values[0]) ? 1 : 0;
+  logDebug_('getAllData: leitura inicial', {
+    sheet: SHEET_DATA,
+    lastRow: lastRow,
+    totalRowsLidas: values.length,
+    startIndex: startIndex,
+    firstRow: values[0] || []
+  });
 
-  const values = sh.getRange(2, 1, lastRow - 1, 3).getValues();
+  const rows = [];
+  for (let i = startIndex; i < values.length; i++) {
+    const row = values[i];
+    const op = String(row[0] || '').trim();
+    const dados = String(row[1] || '').trim();
 
-  return values
-    .filter(row => String(row[0]).trim() !== '')
-    .map(row => ({
-      operacao: String(row[0] || '').trim(),
-      dados: String(row[1] || '').trim(),
-      valor: Number(row[2]) || 0
-    }));
+    if (!op && !dados && String(row[2] || '').trim() === '') continue;
+
+    if (!op) continue;
+
+    rows.push({
+      operacao: op,
+      dados: dados,
+      valor: parseValor_(row[2])
+    });
+  }
+
+  logDebug_('getAllData: linhas processadas', {
+    totalRetornado: rows.length,
+    amostra: rows.slice(0, 5)
+  });
+  return rows;
 }
 
 function syncData() {
-  return {
-    success: true,
-    data: getAllData(),
-    config: getConfig(),
-    updatedAt: new Date()
-  };
+  try {
+    logDebug_('syncData: início');
+    const data = getAllData();
+    const config = getConfig();
+    logDebug_('syncData: sucesso', { dataCount: data.length, config: config });
+    return {
+      success: true,
+      data: data,
+      config: config,
+      updatedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    logDebug_('syncData: erro', {
+      message: error && error.message ? error.message : String(error),
+      stack: error && error.stack ? error.stack : null
+    });
+    return {
+      success: false,
+      data: [],
+      config: { dashboard_title: 'Dashboard de Operações' },
+      updatedAt: new Date().toISOString(),
+      error: error && error.message ? error.message : String(error)
+    };
+  }
+}
+
+function debugSyncData() {
+  return syncData();
+}
+
+function syncDataJson() {
+  return JSON.stringify(syncData());
 }
