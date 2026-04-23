@@ -677,10 +677,19 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
               <div class="bg-white/5 rounded-lg p-3">
                 <div class="flex items-center gap-2 text-xs text-gray-400 mb-2"><i data-lucide="wallet" class="w-3.5 h-3.5 text-red-300"></i><span>Aquisição</span></div>
-                <div class="space-y-1">
-                  <div class="flex justify-between text-[11px]"><span class="text-gray-400">Gasto</span><span class="text-red-400 font-semibold">${fmt(m.aqG)}</span></div>
-                  <div class="flex justify-between text-[11px]"><span class="text-gray-400">Receita</span><span class="text-emerald-400 font-semibold">${fmt(m.aqR)}</span></div>
-                  <div class="flex justify-between text-[11px]"><span class="text-gray-400">ROAS</span><span class="${roasAQ >= 1 ? 'text-emerald-400' : 'text-red-400'} font-semibold">${fmtRoaPct(roasAQ)}</span></div>
+                <div class="grid grid-cols-3 gap-2">
+                  <div class="text-center">
+                    <div class="text-[10px] text-gray-400">Gasto</div>
+                    <div class="text-[11px] font-semibold text-red-400 whitespace-nowrap">${fmt(m.aqG)}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-[10px] text-gray-400">Receita</div>
+                    <div class="text-[11px] font-semibold text-emerald-400 whitespace-nowrap">${fmt(m.aqR)}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-[10px] text-gray-400">ROAS</div>
+                    <div class="text-[11px] font-semibold ${roasAQ >= 1 ? 'text-emerald-400' : 'text-red-400'} whitespace-nowrap">${fmtRoaPct(roasAQ)}</div>
+                  </div>
                 </div>
               </div>
               <div class="bg-white/5 rounded-lg p-3">
@@ -693,9 +702,15 @@
               </div>
               <div class="bg-white/5 rounded-lg p-3">
                 <div class="flex items-center gap-2 text-xs text-gray-400 mb-2"><i data-lucide="activity" class="w-3.5 h-3.5 text-cyan-300"></i><span>Retenção</span></div>
-                <div class="space-y-1">
-                  <div class="flex justify-between text-[11px]"><span class="text-gray-400">Sessões</span><span class="text-cyan-300 font-semibold">${fmtN(m.reSes)}</span></div>
-                  <div class="flex justify-between text-[11px]"><span class="text-gray-400">RPS Médio</span><span class="text-cyan-300 font-semibold">${fmtUSD(rpsMedRet)}</span></div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="text-center">
+                    <div class="text-[10px] text-gray-400">Sessões</div>
+                    <div class="text-[11px] font-semibold text-cyan-300 whitespace-nowrap">${fmtN(m.reSes)}</div>
+                  </div>
+                  <div class="text-center">
+                    <div class="text-[10px] text-gray-400">RPS Médio</div>
+                    <div class="text-[11px] font-semibold text-cyan-300 whitespace-nowrap">${fmtUSD(rpsMedRet)}</div>
+                  </div>
                 </div>
               </div>
             </div>
